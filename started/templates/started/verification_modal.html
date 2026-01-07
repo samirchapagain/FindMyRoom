@@ -1,0 +1,227 @@
+<!-- Verification Code Modal -->
+<div id="verificationModal" class="payment-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Enter Verification Code</h3>
+            <button class="close-btn" onclick="closeVerificationModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="verification-info">
+                <div class="verification-icon">
+                    <i class="fas fa-key text-green-600 text-4xl mb-4"></i>
+                </div>
+                <h4>Payment Verification Required</h4>
+                <p>Enter the 6-digit verification code you received after payment to unlock chat access.</p>
+                
+                <div class="verification-input-container">
+                    <input 
+                        type="text" 
+                        id="verificationCodeInput" 
+                        placeholder="Enter 6-digit code" 
+                        maxlength="6"
+                        class="verification-input"
+                        onkeypress="handleVerificationKeyPress(event)"
+                        oninput="formatVerificationCode(this)"
+                    >
+                    <small class="text-gray-500">Example: ABC123</small>
+                </div>
+                
+                <div class="verification-help">
+                    <p><i class="fas fa-info-circle text-blue-500"></i> Check your email for the verification code</p>
+                    <p><i class="fas fa-clock text-orange-500"></i> Code expires in 24 hours</p>
+                </div>
+            </div>
+            
+            <div class="verification-actions">
+                <button id="verify-code-btn" class="verify-btn" onclick="verifyPaymentCode()">
+                    <i class="fas fa-check"></i> Verify Code
+                </button>
+                <button onclick="closeVerificationModal()" class="cancel-btn">Cancel</button>
+            </div>
+            
+            <div class="verification-footer">
+                <p>Don't have a code? <a href="#" onclick="openPaymentModal(currentVerificationRoomId)">Make Payment</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.verification-info {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.verification-info h4 {
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+    font-size: 1.25rem;
+}
+
+.verification-info p {
+    color: #718096;
+    margin-bottom: 1.5rem;
+}
+
+.verification-input-container {
+    margin: 1.5rem 0;
+}
+
+.verification-input {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.5rem;
+    text-align: center;
+    letter-spacing: 0.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 0.5rem;
+    text-transform: uppercase;
+    font-weight: bold;
+    transition: border-color 0.3s;
+}
+
+.verification-input:focus {
+    outline: none;
+    border-color: #48bb78;
+    box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.1);
+}
+
+.verification-help {
+    background: #f7fafc;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+}
+
+.verification-help p {
+    margin: 0.5rem 0;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.verification-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.verify-btn {
+    flex: 1;
+    background: #48bb78;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.verify-btn:hover {
+    background: #38a169;
+}
+
+.verify-btn:disabled {
+    background: #a0aec0;
+    cursor: not-allowed;
+}
+
+.verification-footer {
+    text-align: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.verification-footer a {
+    color: #4299e1;
+    text-decoration: none;
+}
+
+.verification-footer a:hover {
+    text-decoration: underline;
+}
+</style>
+
+<script>
+let currentVerificationRoomId = null;
+
+function openVerificationModal(roomId) {
+    currentVerificationRoomId = roomId;
+    document.getElementById('verificationModal').style.display = 'flex';
+    document.getElementById('verificationCodeInput').focus();
+}
+
+function closeVerificationModal() {
+    document.getElementById('verificationModal').style.display = 'none';
+    document.getElementById('verificationCodeInput').value = '';
+    currentVerificationRoomId = null;
+}
+
+function formatVerificationCode(input) {
+    // Convert to uppercase and remove non-alphanumeric characters
+    input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function handleVerificationKeyPress(event) {
+    if (event.key === 'Enter') {
+        verifyPaymentCode();
+    }
+}
+
+async function verifyPaymentCode() {
+    const verificationCode = document.getElementById('verificationCodeInput').value.trim();
+    const verifyBtn = document.getElementById('verify-code-btn');
+    
+    if (!verificationCode || verificationCode.length !== 6) {
+        alert('Please enter a valid 6-digit verification code');
+        return;
+    }
+    
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+    
+    try {
+        const response = await fetch('/verify-payment-code/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                room_id: currentVerificationRoomId,
+                verification_code: verificationCode
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            closeVerificationModal();
+            showUnlockedRoom(currentVerificationRoomId, data.contact_details);
+            showSuccessMessage('Verification successful! Chat unlocked.');
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Verification error:', error);
+        alert('Verification failed. Please try again.');
+    } finally {
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = '<i class="fas fa-check"></i> Verify Code';
+    }
+}
+
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    successDiv.innerHTML = '<i class="fas fa-check-circle mr-2"></i>' + message;
+    document.body.appendChild(successDiv);
+    
+    setTimeout(() => {
+        successDiv.remove();
+    }, 5000);
+}
+</script>

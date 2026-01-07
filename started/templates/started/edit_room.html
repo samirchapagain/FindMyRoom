@@ -1,0 +1,195 @@
+{% extends 'started/base.html' %}
+
+{% block content %}
+<div class="dashboard active">
+    <div class="owner-container">
+        <main class="owner-main">
+            <h2>Edit Room Listing</h2>
+            <p>Update your property details</p>
+            
+            <div class="add-room-form">
+                {% if form.errors %}
+                    <div style="background: #fee; border: 1px solid #fcc; padding: 10px; margin-bottom: 20px; border-radius: 5px;">
+                        <h4 style="color: #c00; margin: 0 0 10px 0;">Please correct the following errors:</h4>
+                        {% for field, errors in form.errors.items %}
+                            <p style="margin: 5px 0; color: #c00;"><strong>{{ field }}:</strong> {{ errors|join:", " }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="{{ form.title.id_for_label }}">Room Title</label>
+                            {{ form.title }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.room_type.id_for_label }}">Room Type</label>
+                            {{ form.room_type }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.location.id_for_label }}">Location</label>
+                            {{ form.location }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.price.id_for_label }}">Monthly Price (₹)</label>
+                            {{ form.price }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.contact_phone.id_for_label }}">Contact Phone</label>
+                            {{ form.contact_phone }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.contact_email.id_for_label }}">Contact Email</label>
+                            {{ form.contact_email }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.beds.id_for_label }}">Beds</label>
+                            {{ form.beds }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.baths.id_for_label }}">Baths</label>
+                            {{ form.baths }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.area_m2.id_for_label }}">Area (m²)</label>
+                            {{ form.area_m2 }}
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="{{ form.description.id_for_label }}">Description</label>
+                            {{ form.description }}
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label>Property Location on Map</label>
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Click on the map to mark your property's exact location</p>
+                            <div id="editLocationMap" style="height: 400px; width: 100%; border-radius: 10px; border: 1px solid #ddd;"></div>
+                            {{ form.latitude }}
+                            {{ form.longitude }}
+                            <div id="editSelectedLocation" style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;"></div>
+                        </div>
+                        
+                        <div class="image-upload" style="grid-column: 1 / -1;">
+                            <label for="room_images">
+                                <i class="fas fa-images" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                <h3>Update Room Images</h3>
+                                <p>Select up to 5 images (first will be primary)</p>
+                            </label>
+                            <input type="file" id="room_images" name="room_images" multiple accept="image/*" style="display: none;">
+                            
+                            {% if room.images.exists %}
+                                <div style="margin-top: 1rem;">
+                                    <h4>Current Images:</h4>
+                                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                                        {% for image in room.images.all %}
+                                            <div style="position: relative;">
+                                                {% if image.is_primary %}
+                                                    <img src="{{ image.image.url }}" alt="Room image" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid #10b981;">
+                                                    <span style="position: absolute; top: 5px; right: 5px; background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">Primary</span>
+                                                {% else %}
+                                                    <img src="{{ image.image.url }}" alt="Room image" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd;">
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                        <button type="submit" class="add-room-btn">
+                            <i class="fas fa-save"></i> Update Room
+                        </button>
+                        <a href="{% url 'owner_dashboard' %}" class="add-room-btn" style="background: #6b7280; text-decoration: none; display: inline-flex; align-items: center;">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+let editMap;
+let editMarker;
+
+function initEditLocationMap() {
+    const currentLat = document.getElementById('id_latitude').value;
+    const currentLng = document.getElementById('id_longitude').value;
+    
+    const initialCenter = (currentLat && currentLng) ? 
+        [parseFloat(currentLat), parseFloat(currentLng)] : 
+        [26.629307, 87.982475];
+    
+    editMap = L.map('editLocationMap').setView(initialCenter, 15);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(editMap);
+    
+    // Add existing marker if coordinates exist
+    if (currentLat && currentLng) {
+        editMarker = L.marker(initialCenter, {
+            draggable: true
+        }).addTo(editMap);
+        
+        updateEditCoordinates(parseFloat(currentLat), parseFloat(currentLng));
+        
+        editMarker.on('dragend', function() {
+            const pos = editMarker.getLatLng();
+            updateEditCoordinates(pos.lat, pos.lng);
+        });
+    }
+    
+    editMap.on('click', function(e) {
+        placeEditMarker(e.latlng);
+    });
+}
+
+function placeEditMarker(latlng) {
+    if (editMarker) {
+        editMap.removeLayer(editMarker);
+    }
+    
+    editMarker = L.marker([latlng.lat, latlng.lng], {
+        draggable: true
+    }).addTo(editMap);
+    
+    updateEditCoordinates(latlng.lat, latlng.lng);
+    
+    editMarker.on('dragend', function() {
+        const pos = editMarker.getLatLng();
+        updateEditCoordinates(pos.lat, pos.lng);
+    });
+}
+
+function updateEditCoordinates(lat, lng) {
+    const latField = document.getElementById('id_latitude');
+    const lngField = document.getElementById('id_longitude');
+    
+    if (latField && lngField) {
+        latField.value = lat.toFixed(8);
+        lngField.value = lng.toFixed(8)
+        document.getElementById('editSelectedLocation').innerHTML = `<strong>Location Selected:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)} <span style="color: green;">✓</span>`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof L !== 'undefined') {
+        initEditLocationMap();
+    }
+});
+</script>
+{% endblock %}

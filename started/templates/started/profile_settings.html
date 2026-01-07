@@ -1,0 +1,220 @@
+{% extends 'started/base.html' %}
+
+{% block title %}Profile Settings | LuxeRooms{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="profile-settings-container">
+        <div class="profile-settings-card">
+            <div class="profile-header">
+                <h2>Profile Settings</h2>
+                <p>Manage your account information and profile picture</p>
+            </div>
+            
+            <div class="current-profile">
+                <div class="current-avatar">
+                    {% if profile.profile_image %}
+                        <img src="{{ profile.profile_image.url }}" alt="{{ user.username }}">
+                    {% else %}
+                        <i class="fas fa-user"></i>
+                    {% endif %}
+                </div>
+                <div class="profile-details">
+                    <h3>{{ user.username }}</h3>
+                    <p>{{ user.email }}</p>
+                </div>
+            </div>
+            
+            <form method="POST" enctype="multipart/form-data" class="profile-form">
+                {% csrf_token %}
+                
+                <div class="form-section">
+                    <h3>Personal Information</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="first_name">
+                                <i class="fas fa-user"></i>
+                                First Name
+                            </label>
+                            <input type="text" id="first_name" name="first_name" value="{{ user.first_name }}" placeholder="Enter first name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="last_name">
+                                <i class="fas fa-user"></i>
+                                Last Name
+                            </label>
+                            <input type="text" id="last_name" name="last_name" value="{{ user.last_name }}" placeholder="Enter last name">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="username">
+                            <i class="fas fa-at"></i>
+                            Username
+                        </label>
+                        <input type="text" id="username" name="username" value="{{ user.username }}" required placeholder="Enter username">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">
+                            <i class="fas fa-envelope"></i>
+                            Email Address
+                        </label>
+                        <input type="email" id="email" name="email" value="{{ user.email }}" required placeholder="Enter email">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone_number">
+                            <i class="fas fa-phone"></i>
+                            Phone Number
+                        </label>
+                        <input type="tel" id="phone_number" name="phone_number" value="{{ profile.phone_number }}" placeholder="Enter phone number">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="bio">
+                            <i class="fas fa-info-circle"></i>
+                            Bio
+                        </label>
+                        <textarea id="bio" name="bio" rows="3" placeholder="Tell us about yourself...">{{ profile.bio }}</textarea>
+                    </div>
+                </div>
+                
+                <div class="form-section">
+                    <h3>Profile Picture</h3>
+                    
+                    <div class="form-group">
+                        <label for="profile_image">
+                            <i class="fas fa-camera"></i>
+                            Upload New Picture
+                        </label>
+                        <div class="image-upload-area">
+                            <input type="file" id="profile_image" name="profile_image" accept="image/*">
+                            <div class="upload-placeholder">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Click to upload or drag and drop</p>
+                                <small>PNG, JPG up to 5MB</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-section">
+                    <h3>Change Password</h3>
+                    <p class="section-desc">Leave blank if you don't want to change password</p>
+                    
+                    <div class="form-group">
+                        <label for="current_password">
+                            <i class="fas fa-lock"></i>
+                            Current Password
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="current_password" name="current_password" placeholder="Enter current password">
+                            <button type="button" class="password-toggle" onclick="togglePassword('current_password')">
+                                <i class="fas fa-eye" id="current_password-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="new_password">
+                                <i class="fas fa-key"></i>
+                                New Password
+                            </label>
+                            <div class="password-input-wrapper">
+                                <input type="password" id="new_password" name="new_password" placeholder="Enter new password">
+                                <button type="button" class="password-toggle" onclick="togglePassword('new_password')">
+                                    <i class="fas fa-eye" id="new_password-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="confirm_password">
+                                <i class="fas fa-key"></i>
+                                Confirm Password
+                            </label>
+                            <div class="password-input-wrapper">
+                                <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm new password">
+                                <button type="button" class="password-toggle" onclick="togglePassword('confirm_password')">
+                                    <i class="fas fa-eye" id="confirm_password-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="save-btn">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                    <a href="{% url 'client_dashboard' %}" class="cancel-btn">
+                        <i class="fas fa-times"></i>
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Password visibility toggle function
+function togglePassword(fieldId) {
+    const passwordField = document.getElementById(fieldId);
+    const eyeIcon = document.getElementById(fieldId + '-eye');
+    
+    if (passwordField.type === 'password') {
+        passwordField.type = 'text';
+        eyeIcon.className = 'fas fa-eye-slash';
+    } else {
+        passwordField.type = 'password';
+        eyeIcon.className = 'fas fa-eye';
+    }
+}
+</script>
+
+<style>
+/* Password Toggle Styles */
+.password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-wrapper input {
+    padding-right: 3rem;
+    flex: 1;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-toggle:hover {
+    color: var(--light-accent);
+}
+
+.dark-mode .password-toggle {
+    color: #9ca3af;
+}
+
+.dark-mode .password-toggle:hover {
+    color: var(--dark-accent);
+}
+</style>
+
+{% endblock %}

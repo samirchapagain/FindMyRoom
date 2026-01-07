@@ -1,0 +1,38 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.home_view, name='home'),
+    path('client/dashboard/', views.client_dashboard, name='client_dashboard'),
+    path('owner/dashboard/', views.owner_dashboard, name='owner_dashboard'),
+    path('unlock/', views.unlock_room, name='unlock_room'),
+    path('voice-search/', views.voice_search, name='voice_search'),
+    path('sms-inquiry/', views.send_sms_inquiry, name='sms_inquiry'),
+    path('delete-room/<int:room_id>/', views.delete_room, name='delete_room'),
+    path('edit-room/<int:room_id>/', views.edit_room, name='edit_room'),
+    path('create-payment-intent/', views.create_payment_intent, name='create_payment_intent'),
+    path('stripe-webhook/', views.stripe_webhook, name='stripe_webhook'),
+    path('api/messages/', views.get_messages, name='get_messages'),
+    path('api/messages/send/', views.send_message, name='send_message'),
+    path('api/messages/read/', views.mark_messages_read, name='mark_messages_read'),
+    path('api/unread-count/', views.get_unread_count, name='get_unread_count'),
+
+    path('login/', views.login_view, name='login'),
+    path('register/', views.register_view, name='register'),
+    path('logout/', views.logout_view, name='logout'),
+    path('password-reset/', views.password_reset_view, name='password_reset'),
+    path('password-reset-confirm/', views.password_reset_confirm_view, name='password_reset_confirm'),
+    path('esewa-success/', views.esewa_success, name='esewa_success'),
+    path('esewa-failure/', views.esewa_failure, name='esewa_failure'),
+    path('esewa-webhook/', views.esewa_webhook, name='esewa_webhook'),
+    path('khalti-verify/', views.khalti_verify, name='khalti_verify'),
+    path('api/room/<int:room_id>/', views.get_room_info, name='get_room_info'),
+    path('profile/', views.profile_settings, name='profile_settings'),
+    path('api/owner-messages/', views.get_owner_messages, name='get_owner_messages'),
+    path('api/client-messages/', views.get_client_messages, name='get_client_messages'),
+    path('api/test-send/', views.test_send_message, name='test_send_message'),
+    path('api/favorites/toggle/', views.toggle_favorite, name='toggle_favorite'),
+    path('api/favorites/', views.get_favorites, name='get_favorites'),
+    path('api/book-room/', views.book_room, name='book_room'),
+    path('api/booking-status/<int:room_id>/', views.get_booking_status, name='get_booking_status'),
+]

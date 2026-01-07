@@ -1,0 +1,538 @@
+<!-- Chat Notification Icon -->
+<div id="chatNotification" onclick="showNotificationPreview()" style="position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: #25d366; border-radius: 50%; display: none; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 8888; animation: pulse 2s infinite;">
+    <i class="fas fa-comment" style="color: white; font-size: 24px;"></i>
+    <div id="notificationBadge" style="position: absolute; top: -5px; right: -5px; background: #ff4444; color: white; border-radius: 50%; width: 24px; height: 24px; display: none; justify-content: center; align-items: center; font-size: 12px; font-weight: bold;">1</div>
+</div>
+
+<div id="chatInterface" onclick="if(event.target === this) { event.stopPropagation(); closeChatInterface(); }" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; display: none; justify-content: center; align-items: center;">
+    <div onclick="event.stopPropagation();" style="background: white; width: 400px; height: 600px; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="background: #075e54; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <h3 id="chatOwnerName" style="margin: 0; font-size: 16px;">Chat</h3>
+                    <small id="chatRoomTitle" style="opacity: 0.8;"></small>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button id="locationButton" onclick="event.stopPropagation(); showLocationMap();" style="background: #128c7e; border: none; color: white; padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="View property location">
+                    <i class="fas fa-map-marker-alt"></i>
+                </button>
+                <button id="bookingButton" onclick="event.stopPropagation(); bookRoom();" style="background: #25d366; border: none; color: white; padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 14px; display: none; align-items: center; gap: 5px;" title="Book this room">
+                    <i class="fas fa-calendar-check"></i>
+                    <span>Book</span>
+                </button>
+                <button onclick="event.stopPropagation(); closeChatInterface();" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer;">&times;</button>
+            </div>
+        </div>
+        <div id="chatMessages" style="flex: 1; padding: 15px; background: #e5ddd5; overflow-y: auto;"></div>
+        <div style="padding: 15px; background: #f0f0f0; display: flex; gap: 10px;">
+            <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 20px; outline: none;">
+            <button onclick="sendChatMessage()" style="background: #25d366; color: white; border: none; padding: 10px 15px; border-radius: 50%; cursor: pointer;">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Location Map Modal -->
+<div id="locationMapModal" onclick="if(event.target === this) { closeLocationMap(); }" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; display: none; justify-content: center; align-items: center;">
+    <div onclick="event.stopPropagation();" style="background: white; width: 90%; max-width: 600px; height: 70%; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="background: #128c7e; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 18px;">Property Location</h3>
+            <button onclick="closeLocationMap();" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="clientLocationMap" style="flex: 1; width: 100%;"></div>
+    </div>
+</div>
+
+<script>
+let chatSocket = null;
+let currentChatRoomId = null;
+let bookingStatus = null;
+let currentRoomLocation = null;
+
+async function openChatInterface(roomId, ownerName) {
+    currentChatRoomId = roomId;
+    
+    // Hide notification when chat opens
+    hideChatNotification();
+    
+    // Hide room-specific notification icon
+    const roomNotification = document.getElementById(`chatNotif-${roomId}`);
+    if (roomNotification) {
+        roomNotification.style.display = 'none';
+    }
+    
+    // Show/hide booking button based on user role
+    const bookingButton = document.getElementById('bookingButton');
+    const isClient = window.location.pathname.includes('/client/');
+    if (bookingButton && isClient) {
+        bookingButton.style.display = 'flex';
+        // Check booking status for clients
+        await checkBookingStatus(roomId);
+    } else if (bookingButton) {
+        bookingButton.style.display = 'none';
+    }
+    
+    // Get room and owner information
+    try {
+        const response = await fetch(`/api/room/${roomId}/`);
+        const roomData = await response.json();
+        
+        if (roomData.owner_name) {
+            ownerName = roomData.owner_name;
+            document.getElementById('chatOwnerName').textContent = ownerName;
+        }
+        if (roomData.room_title) {
+            document.getElementById('chatRoomTitle').textContent = roomData.room_title;
+        }
+        if (roomData.latitude && roomData.longitude) {
+            currentRoomLocation = {
+                lat: parseFloat(roomData.latitude),
+                lng: parseFloat(roomData.longitude)
+            };
+            console.log('Location loaded:', currentRoomLocation);
+        } else {
+            console.log('No location data found for room');
+            console.log('Room data received:', roomData);
+            console.log('Latitude:', roomData.latitude, 'Longitude:', roomData.longitude);
+        }
+    } catch (error) {
+        console.error('Error fetching room info:', error);
+        // Fallback to provided ownerName or default
+        document.getElementById('chatOwnerName').textContent = ownerName || 'Owner';
+    }
+    
+    const chatInterface = document.getElementById('chatInterface');
+    chatInterface.style.display = 'flex';
+    
+    // Mark messages as read when owner opens chat
+    const isOwner = window.location.pathname.includes('/owner/');
+    if (isOwner) {
+        setTimeout(() => {
+            markOwnerMessagesAsRead(roomId);
+        }, 1000);
+    }
+    
+    initializeChatSocket(roomId);
+    loadChatMessages(roomId);
+}
+
+function closeChatInterface() {
+    const chatInterface = document.getElementById('chatInterface');
+    if (chatInterface) {
+        chatInterface.style.display = 'none';
+    }
+    
+    if (chatSocket) {
+        chatSocket.close();
+        chatSocket = null;
+    }
+    
+    // Don't clear currentChatRoomId so notifications can still work
+    // currentChatRoomId = null;
+    
+    // Clear any message input
+    const messageInput = document.getElementById('chatMessageInput');
+    if (messageInput) {
+        messageInput.value = '';
+    }
+}
+
+function initializeChatSocket(roomId) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    chatSocket = new WebSocket(`${protocol}//${window.location.host}/ws/chat/${roomId}/`);
+    
+    chatSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        if (data.type === 'chat_message') {
+            displayChatMessage(data.message);
+            
+            // Show notification if chat is not visible and message is from owner
+            const chatInterface = document.getElementById('chatInterface');
+            if (chatInterface.style.display === 'none' && !data.message.is_mine) {
+                showChatNotification(data.message);
+            }
+        }
+    };
+    
+    chatSocket.onclose = function(e) {
+        console.log('Chat socket closed');
+    };
+    
+    chatSocket.onerror = function(e) {
+        console.error('Chat socket error:', e);
+    };
+}
+
+async function loadChatMessages(roomId) {
+    try {
+        const response = await fetch(`/api/messages/?room_id=${roomId}`);
+        const data = await response.json();
+        
+        if (data.messages) {
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.innerHTML = '';
+            
+            data.messages.forEach(message => {
+                displayChatMessage(message, false);
+            });
+            
+            scrollToBottom();
+        }
+    } catch (error) {
+        console.error('Error loading messages:', error);
+    }
+}
+
+function displayChatMessage(message, animate = true) {
+    const messagesContainer = document.getElementById('chatMessages');
+    const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const isOwn = message.is_mine || message.sender_id === window.userId;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = `display: flex; justify-content: ${isOwn ? 'flex-end' : 'flex-start'}; margin-bottom: 10px; align-items: flex-end; gap: 5px;`;
+    
+    messageDiv.innerHTML = `
+        <div style="background: ${isOwn ? '#dcf8c6' : 'white'}; padding: 8px 12px; border-radius: 15px; max-width: 70%; word-wrap: break-word; ${!isOwn ? 'border: 1px solid #ddd;' : ''}">
+            ${!isOwn ? `<div style="font-size: 12px; color: #075e54; font-weight: bold; margin-bottom: 2px;">${message.sender_name || 'Owner'}</div>` : ''}
+            <div style="font-size: 14px; color: #000;">${escapeHtml(message.content)}</div>
+            <div style="font-size: 11px; color: #666; ${isOwn ? 'text-align: right;' : ''} margin-top: 2px;">${time}${isOwn ? ' ✓✓' : ''}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('chatMessageInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Show message immediately with single tick
+    const tempMessage = {
+        content: message,
+        is_mine: true,
+        sender_id: window.userId,
+        timestamp: new Date().toISOString(),
+        temp_id: Date.now()
+    };
+    
+    displayChatMessage(tempMessage);
+    input.value = '';
+    
+    // Send via WebSocket if available
+    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({
+            'type': 'chat_message',
+            'message': message,
+            'temp_id': tempMessage.temp_id
+        }));
+    } else {
+        // Fallback to HTTP API
+        sendMessageViaAPI(message, tempMessage.temp_id);
+    }
+}
+
+async function sendMessageViaAPI(message, tempId) {
+    try {
+        const response = await fetch('/api/messages/send/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                room_id: currentChatRoomId,
+                content: message
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            // Update message to show double tick
+            updateMessageDeliveryStatus(tempId, true);
+        }
+    } catch (error) {
+        console.error('Failed to send message:', error);
+    }
+}
+
+function updateMessageDeliveryStatus(tempId, delivered) {
+    const messages = document.querySelectorAll('#chatMessages > div');
+    messages.forEach(msgDiv => {
+        const timeDiv = msgDiv.querySelector('div:last-child div:last-child');
+        if (timeDiv && timeDiv.textContent.includes('✓') && !timeDiv.textContent.includes('✓✓')) {
+            if (delivered) {
+                timeDiv.textContent = timeDiv.textContent.replace('✓', '✓✓');
+            }
+        }
+    });
+}
+
+function handleChatKeyPress(event) {
+    if (event.key === 'Enter') {
+        sendChatMessage();
+    }
+}
+
+function scrollToBottom() {
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function showChatNotification(message) {
+    const notification = document.getElementById('chatNotification');
+    const badge = document.getElementById('notificationBadge');
+    
+    notification.style.display = 'flex';
+    badge.style.display = 'flex';
+    badge.textContent = '1';
+    
+    setTimeout(() => {
+        hideChatNotification();
+    }, 5000);
+}
+
+function hideChatNotification() {
+    const notification = document.getElementById('chatNotification');
+    const badge = document.getElementById('notificationBadge');
+    
+    notification.style.display = 'none';
+    badge.style.display = 'none';
+}
+
+function showNotificationPreview() {
+    if (currentChatRoomId) {
+        const chatInterface = document.getElementById('chatInterface');
+        chatInterface.style.display = 'flex';
+        hideChatNotification();
+    }
+}
+
+// Mark messages as read when owner views them
+async function markOwnerMessagesAsRead(roomId) {
+    try {
+        await fetch('/api/messages/read/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                room_id: roomId
+            })
+        });
+        
+        // Force update message count badge
+        setTimeout(() => {
+            if (typeof updateMessageCount === 'function') {
+                updateMessageCount();
+            } else {
+                // Direct badge update if function not available
+                const badge = document.getElementById('messageCount');
+                if (badge) {
+                    badge.style.display = 'none';
+                }
+            }
+        }, 500);
+    } catch (error) {
+        console.error('Error marking messages as read:', error);
+    }
+}
+
+function bookRoom() {
+    if (currentChatRoomId) {
+        const bookBtn = document.querySelector('[onclick="event.stopPropagation(); bookRoom();"]');
+        
+        if (bookingStatus === 'pending') {
+            // Cancel booking
+            cancelBooking();
+        } else {
+            // Create booking
+            createBooking();
+        }
+    }
+}
+
+async function createBooking() {
+    try {
+        const response = await fetch('/api/book-room/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                room_id: currentChatRoomId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            bookingStatus = data.status;
+            updateBookingButton();
+            alert('Booking request sent to owner via email!');
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Booking error:', error);
+        alert('Failed to send booking request');
+    }
+}
+
+async function cancelBooking() {
+    try {
+        const response = await fetch('/api/book-room/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                room_id: currentChatRoomId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            bookingStatus = data.status;
+            updateBookingButton();
+            alert('Booking cancelled and owner notified via email!');
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Cancel booking error:', error);
+        alert('Failed to cancel booking');
+    }
+}
+
+async function checkBookingStatus(roomId) {
+    try {
+        const response = await fetch(`/api/booking-status/${roomId}/`);
+        const data = await response.json();
+        
+        if (data.has_booking) {
+            bookingStatus = data.status;
+        } else {
+            bookingStatus = null;
+        }
+        
+        updateBookingButton();
+    } catch (error) {
+        console.error('Error checking booking status:', error);
+    }
+}
+
+function updateBookingButton() {
+    const bookBtn = document.getElementById('bookingButton');
+    
+    if (bookBtn && bookBtn.style.display !== 'none') {
+        if (bookingStatus === 'pending') {
+            bookBtn.innerHTML = '<i class="fas fa-times"></i><span>Cancel</span>';
+            bookBtn.style.background = '#ef4444';
+            bookBtn.title = 'Cancel booking request';
+            bookBtn.disabled = false;
+        } else if (bookingStatus === 'confirmed') {
+            bookBtn.innerHTML = '<i class="fas fa-check"></i><span>Booked</span>';
+            bookBtn.style.background = '#10b981';
+            bookBtn.title = 'Booking confirmed';
+            bookBtn.disabled = true;
+        } else {
+            bookBtn.innerHTML = '<i class="fas fa-calendar-check"></i><span>Book</span>';
+            bookBtn.style.background = '#25d366';
+            bookBtn.title = 'Book this room';
+            bookBtn.disabled = false;
+        }
+    }
+}
+
+// Test function to show notification (for demonstration)
+function testNotification() {
+    showChatNotification({ content: 'Test message from owner' });
+}
+
+function showLocationMap() {
+    console.log('Current room location:', currentRoomLocation);
+    if (!currentRoomLocation) {
+        alert('Location not available for this property');
+        return;
+    }
+    
+    const modal = document.getElementById('locationMapModal');
+    modal.style.display = 'flex';
+    
+    // Initialize map after modal is visible
+    setTimeout(() => {
+        initClientLocationMap();
+    }, 100);
+}
+
+function closeLocationMap() {
+    const modal = document.getElementById('locationMapModal');
+    modal.style.display = 'none';
+}
+
+function initClientLocationMap() {
+    if (!currentRoomLocation) return;
+    
+    const birtamodeBounds = [
+        [26.6200, 87.9700], // Southwest
+        [26.6400, 88.0000]  // Northeast
+    ];
+    
+    const map = L.map('clientLocationMap', {
+        maxBounds: birtamodeBounds,
+        maxBoundsViscosity: 1.0
+    }).setView([currentRoomLocation.lat, currentRoomLocation.lng], 16);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        minZoom: 13,
+        maxZoom: 18
+    }).addTo(map);
+    
+    L.marker([currentRoomLocation.lat, currentRoomLocation.lng])
+        .addTo(map)
+        .bindPopup('Property Location')
+        .openPopup();
+}
+
+// Show notification when page loads if user has active chat
+document.addEventListener('DOMContentLoaded', function() {
+    // You can call testNotification() here to see the notification
+    // testNotification();
+});
+</script>
+
+<style>
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    50% {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(37, 211, 102, 0.4);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+}
+</style>

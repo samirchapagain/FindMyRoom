@@ -1,0 +1,512 @@
+{% extends 'started/base.html' %}
+
+{% block content %}
+<div class="dashboard active" id="ownerDashboard">
+    <div class="owner-container">
+        <aside class="owner-sidebar">
+            <div class="sidebar-item active">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+            </div>
+            <div class="sidebar-item" onclick="scrollToAddRoom()">
+                <i class="fas fa-plus-circle"></i>
+                <span>Add Room</span>
+            </div>
+            <div class="sidebar-item" onclick="scrollToListings()">
+                <i class="fas fa-list"></i>
+                <span>My Listings</span>
+            </div>
+            <div class="sidebar-item" onclick="showMessages()">
+                <i class="fas fa-comment-alt"></i>
+                <span>Messages</span>
+                <span id="messageCount" class="message-badge" style="display: none;">0</span>
+            </div>
+            <div class="sidebar-item" onclick="window.location.href='/profile/'">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </div>
+        </aside>
+        
+        <main class="owner-main">
+            <h2 id="addRoomSection">Add New Room Listing</h2>
+            <p>Fill out the form to list your property</p>
+            
+            <div class="add-room-form">
+                {% if form.errors %}
+                    <div style="background: #fee; border: 1px solid #fcc; padding: 10px; margin-bottom: 20px; border-radius: 5px;">
+                        <h4 style="color: #c00; margin: 0 0 10px 0;">Please correct the following errors:</h4>
+                        {% for field, errors in form.errors.items %}
+                            <p style="margin: 5px 0; color: #c00;"><strong>{{ field }}:</strong> {{ errors|join:", " }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="{{ form.title.id_for_label }}">Room Title</label>
+                            {{ form.title }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.room_type.id_for_label }}">Room Type</label>
+                            {{ form.room_type }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.location.id_for_label }}">Location</label>
+                            {{ form.location }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.price.id_for_label }}">Monthly Price (₹)</label>
+                            {{ form.price }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.contact_phone.id_for_label }}">Contact Phone</label>
+                            {{ form.contact_phone }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.contact_email.id_for_label }}">Contact Email</label>
+                            {{ form.contact_email }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.beds.id_for_label }}">Beds</label>
+                            {{ form.beds }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.baths.id_for_label }}">Baths</label>
+                            {{ form.baths }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.area_m2.id_for_label }}">Area (m²)</label>
+                            {{ form.area_m2 }}
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="{{ form.description.id_for_label }}">Description</label>
+                            {{ form.description }}
+                        </div>
+                        
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label>Property Location on Map</label>
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Click on the map to mark your property's exact location</p>
+                            <div id="locationMap" style="height: 400px; width: 100%; border-radius: 10px; border: 1px solid #ddd;"></div>
+                            {{ form.latitude }}
+                            {{ form.longitude }}
+                            <div id="selectedLocation" style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;"></div>
+                        </div>
+                        
+                        <div class="image-upload" style="grid-column: 1 / -1;">
+                            <label for="room_images">
+                                <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                <h3>Upload Room Images</h3>
+                                <p>Select multiple images (up to 5)</p>
+                            </label>
+                            <input type="file" id="room_images" name="room_images" multiple accept="image/*" style="display: none;">
+                            <div id="image-preview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;"></div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="add-room-btn">
+                        <i class="fas fa-plus-circle"></i> Add Room Listing
+                    </button>
+                </form>
+            </div>
+            
+            <h2 id="listingsSection">My Current Listings</h2>
+            
+            <div class="rooms-grid">
+                {% for room in owner_rooms %}
+                <div class="room-card">
+                    {% if room.images.exists %}
+                        <img src="{{ room.images.first.image.url }}" alt="{{ room.title }}" class="card-image">
+                    {% elif room.image %}
+                        <img src="{{ room.image.url }}" alt="{{ room.title }}" class="card-image">
+                    {% else %}
+                        <img src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="{{ room.title }}" class="card-image">
+                    {% endif %}
+                    <div class="card-content">
+                        <h3>{{ room.title }}</h3>
+                        <div class="card-details">
+                            <div class="detail-item">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>{{ room.location }}</span>
+                            </div>
+                            <div class="price">₹{{ room.price }}/month</div>
+                        </div>
+                        <p>{{ room.description|truncatewords:10 }}</p>
+                        
+                        {% if room.images.exists %}
+                        <div style="display: flex; gap: 5px; margin: 10px 0; overflow-x: auto;">
+                            {% for image in room.images.all|slice:":4" %}
+                                <img src="{{ image.image.url }}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
+                            {% endfor %}
+                            {% if room.images.count > 4 %}
+                                <div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #666;">+{{ room.images.count|add:"-4" }}</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                            <a href="{% url 'edit_room' room.id %}" style="flex: 1; padding: 0.6rem; border: none; border-radius: 8px; background: var(--light-accent); color: white; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            {% if room.latitude and room.longitude %}
+                            <button onclick="viewRoomLocation({{ room.latitude }}, {{ room.longitude }}, '{{ room.title|escapejs }}')" style="flex: 1; padding: 0.6rem; border: none; border-radius: 8px; background: #10b981; color: white; cursor: pointer;">
+                                <i class="fas fa-map-marker-alt"></i> View Location
+                            </button>
+                            {% endif %}
+                            <form method="POST" action="{% url 'delete_room' room.id %}" style="flex: 1;" onsubmit="return confirm('Are you sure you want to delete this room?')">
+                                {% csrf_token %}
+                                <button type="submit" style="width: 100%; padding: 0.6rem; border: none; border-radius: 8px; background: #ef4444; color: white;">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <p>No listings yet. Add your first room above!</p>
+                {% endfor %}
+            </div>
+        </main>
+    </div>
+</div>
+
+{% include 'started/unified_chat.html' %}
+
+<div id="messagesModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999;">
+    <div style="background: white; width: 400px; height: 600px; margin: 5% auto; border-radius: 10px; display: flex; flex-direction: column;">
+        <div style="background: #075e54; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px 10px 0 0;">
+            <h3 style="margin: 0;">Client Messages</h3>
+            <button onclick="closeMessages()" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="messagesList" style="flex: 1; padding: 20px; overflow-y: auto;">
+            <p style="text-align: center; color: #666; margin-top: 50px;">No messages yet</p>
+        </div>
+    </div>
+</div>
+
+<!-- Room Location View Modal -->
+<div id="roomLocationModal" onclick="if(event.target === this) { closeRoomLocationModal(); }" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; display: none; justify-content: center; align-items: center;">
+    <div onclick="event.stopPropagation();" style="background: white; width: 90%; max-width: 600px; height: 70%; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="background: #10b981; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="roomLocationTitle" style="margin: 0; font-size: 18px;">Room Location</h3>
+            <button onclick="closeRoomLocationModal();" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="roomLocationMap" style="flex: 1; width: 100%;"></div>
+    </div>
+</div>
+
+<script>
+// Owner Dashboard Map Variables
+let ownerLocationMap;
+let ownerLocationMarker;
+
+function initLocationMap() {
+    const birtamodeBounds = [
+        [26.6200, 87.9700], // Southwest
+        [26.6400, 88.0000]  // Northeast
+    ];
+    
+    ownerLocationMap = L.map('locationMap', {
+        maxBounds: birtamodeBounds,
+        maxBoundsViscosity: 1.0
+    }).setView([26.629307, 87.982475], 15);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        minZoom: 13,
+        maxZoom: 18
+    }).addTo(ownerLocationMap);
+    
+    ownerLocationMap.fitBounds(birtamodeBounds);
+    
+    ownerLocationMap.on('click', function(e) {
+        placeMarker(e.latlng);
+    });
+}
+
+function placeMarker(latlng) {
+    if (ownerLocationMarker) {
+        ownerLocationMap.removeLayer(ownerLocationMarker);
+    }
+    
+    ownerLocationMarker = L.marker([latlng.lat, latlng.lng], {
+        draggable: true
+    }).addTo(ownerLocationMap);
+    
+    updateCoordinates(latlng.lat, latlng.lng);
+    
+    ownerLocationMarker.on('dragend', function() {
+        const pos = ownerLocationMarker.getLatLng();
+        updateCoordinates(pos.lat, pos.lng);
+    });
+}
+
+function updateCoordinates(lat, lng) {
+    const latField = document.getElementById('id_latitude');
+    const lngField = document.getElementById('id_longitude');
+    
+    if (latField && lngField) {
+        latField.value = lat.toFixed(8);
+        lngField.value = lng.toFixed(8);
+        
+        document.getElementById('selectedLocation').innerHTML = `<strong>Location Selected:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)} <span style="color: green;">✓</span>`;
+    }
+}
+
+function scrollToAddRoom() {
+    document.getElementById('addRoomSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+function scrollToListings() {
+    document.getElementById('listingsSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+function toggleMapFullscreen(mapId) {
+    const mapContainer = document.getElementById(mapId).parentElement;
+    const icon = document.getElementById(mapId + 'Icon');
+    
+    if (!document.fullscreenElement) {
+        mapContainer.requestFullscreen().then(() => {
+            icon.className = 'fas fa-compress';
+            mapContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; background: white; padding: 20px; box-sizing: border-box;';
+            document.getElementById(mapId).style.height = 'calc(100vh - 40px)';
+            setTimeout(() => {
+                ownerLocationMap.invalidateSize();
+                const birtamodeBounds = [[26.6200, 87.9700], [26.6400, 88.0000]];
+                ownerLocationMap.fitBounds(birtamodeBounds, {padding: [20, 20]});
+            }, 100);
+        });
+    } else {
+        document.exitFullscreen().then(() => {
+            icon.className = 'fas fa-expand';
+            mapContainer.style.cssText = 'position: relative;';
+            document.getElementById(mapId).style.height = '400px';
+            setTimeout(() => {
+                ownerLocationMap.invalidateSize();
+                const birtamodeBounds = [[26.6200, 87.9700], [26.6400, 88.0000]];
+                ownerLocationMap.fitBounds(birtamodeBounds);
+            }, 100);
+        });
+    }
+}
+
+async function showMessages() {
+    document.getElementById('messagesModal').style.display = 'flex';
+    await loadOwnerMessages();
+}
+
+function closeMessages() {
+    document.getElementById('messagesModal').style.display = 'none';
+}
+
+async function loadOwnerMessages() {
+    try {
+        const response = await fetch('/api/owner-messages/');
+        const data = await response.json();
+        
+        const messagesList = document.getElementById('messagesList');
+        messagesList.innerHTML = '';
+        
+        if (data.conversations && data.conversations.length > 0) {
+            data.conversations.forEach(conv => {
+                messagesList.insertAdjacentHTML('beforeend', `
+                    <div style="border: 1px solid #ddd; border-radius: 10px; margin-bottom: 15px; padding: 15px; cursor: pointer; display: flex; align-items: center; gap: 15px;" onclick="openOwnerChat(${conv.room_id}, '${conv.client_name}', '${conv.room_title}', ${conv.client_id})">
+                        <div style="width: 50px; height: 50px; border-radius: 50%; background: #075e54; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">
+                            ${conv.client_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <h4 style="margin: 0; color: #075e54; font-size: 16px;">${conv.client_name}</h4>
+                                <small style="color: #666;">${new Date(conv.last_message_time).toLocaleDateString()}</small>
+                            </div>
+                            <p style="margin: 2px 0; color: #666; font-size: 12px;">${conv.room_title}</p>
+                            <p style="margin: 0; color: #333; font-size: 14px;">${conv.last_message}</p>
+                        </div>
+                        ${conv.unread_count > 0 ? `<div style="background: #ff4444; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold;">${conv.unread_count}</div>` : ''}
+                    </div>
+                `);
+            });
+        } else {
+            messagesList.innerHTML = '<p style="text-align: center; color: #666; margin-top: 50px;">No messages yet</p>';
+        }
+    } catch (error) {
+        console.error('Error loading messages:', error);
+        document.getElementById('messagesList').innerHTML = '<p style="text-align: center; color: #666; margin-top: 50px;">Error loading messages</p>';
+    }
+}
+
+function openOwnerChat(roomId, clientName, roomTitle, clientId) {
+    closeMessages();
+    openChatInterface(roomId, clientName);
+    
+    setTimeout(() => {
+        updateMessageCount();
+    }, 500);
+}
+
+async function updateMessageCount() {
+    try {
+        const response = await fetch('/api/unread-count/');
+        const data = await response.json();
+        const badge = document.getElementById('messageCount');
+        
+        if (data.unread_count > 0) {
+            badge.textContent = data.unread_count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error updating message count:', error);
+    }
+}
+
+setInterval(updateMessageCount, 5000);
+
+// Room Location Viewing Functions
+let roomLocationMapInstance;
+
+function viewRoomLocation(lat, lng, roomTitle) {
+    document.getElementById('roomLocationTitle').textContent = roomTitle + ' - Location';
+    document.getElementById('roomLocationModal').style.display = 'flex';
+    
+    setTimeout(() => {
+        initRoomLocationMap(parseFloat(lat), parseFloat(lng));
+    }, 100);
+}
+
+function initRoomLocationMap(lat, lng) {
+    if (roomLocationMapInstance) {
+        roomLocationMapInstance.remove();
+    }
+    
+    const birtamodeBounds = [
+        [26.6200, 87.9700], // Southwest
+        [26.6400, 88.0000]  // Northeast
+    ];
+    
+    roomLocationMapInstance = L.map('roomLocationMap', {
+        maxBounds: birtamodeBounds,
+        maxBoundsViscosity: 1.0
+    }).setView([lat, lng], 16);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        minZoom: 13,
+        maxZoom: 18
+    }).addTo(roomLocationMapInstance);
+    
+    L.marker([lat, lng])
+        .addTo(roomLocationMapInstance)
+        .bindPopup('Property Location')
+        .openPopup();
+}
+
+function closeRoomLocationModal() {
+    document.getElementById('roomLocationModal').style.display = 'none';
+    if (roomLocationMapInstance) {
+        roomLocationMapInstance.remove();
+        roomLocationMapInstance = null;
+    }
+}
+
+// Leaflet Map Integration
+let locationMap;
+let locationMarker;
+
+function initLocationMap() {
+    locationMap = L.map('locationMap').setView([26.629307, 87.982475], 15);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(locationMap);
+    
+    locationMap.on('click', function(e) {
+        placeMarker(e.latlng);
+    });
+}
+
+function placeMarker(latlng) {
+    if (locationMarker) {
+        locationMap.removeLayer(locationMarker);
+    }
+    
+    locationMarker = L.marker([latlng.lat, latlng.lng], {
+        draggable: true
+    }).addTo(locationMap);
+    
+    updateCoordinates(latlng.lat, latlng.lng);
+    
+    locationMarker.on('dragend', function() {
+        const pos = locationMarker.getLatLng();
+        updateCoordinates(pos.lat, pos.lng);
+    });
+}
+
+function updateCoordinates(lat, lng) {
+    const latField = document.getElementById('id_latitude');
+    const lngField = document.getElementById('id_longitude');
+    
+    if (latField && lngField) {
+        latField.value = lat.toFixed(8);
+        lngField.value = lng.toFixed(8);
+        
+        document.getElementById('selectedLocation').innerHTML = `<strong>Location Selected:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)} <span style="color: green;">✓</span>`;
+    }
+}
+
+document.getElementById('room_images').addEventListener('change', function(e) {
+    const preview = document.getElementById('image-preview');
+    preview.innerHTML = '';
+    
+    Array.from(e.target.files).slice(0, 5).forEach(file => {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.style.cssText = 'width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd;';
+        preview.appendChild(img);
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof L !== 'undefined') {
+        initLocationMap();
+    }
+    updateMessageCount();
+});
+</script>
+
+<style>
+.message-badge {
+    background: #ff4444;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 5px;
+    min-width: 18px;
+    height: 18px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+</style>
+
+{% endblock %}

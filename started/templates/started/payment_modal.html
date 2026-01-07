@@ -1,0 +1,375 @@
+<!-- CSRF Token -->
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+<!-- Payment Modal -->
+<div id="paymentModal" class="payment-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Unlock Room Details & Chat</h3>
+            <button class="close-btn" onclick="closePaymentModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="payment-info">
+                <div class="price-display">
+                    <span class="currency">Rs.</span>
+                    <span class="amount">30</span>
+                </div>
+                <p>Pay Rs. 30 to unlock owner details and start chatting</p>
+                <ul class="benefits">
+                    <li><i class="fas fa-check"></i> View owner contact details</li>
+                    <li><i class="fas fa-check"></i> Direct chat with owner</li>
+                    <li><i class="fas fa-check"></i> Send images and messages</li>
+                    <li><i class="fas fa-check"></i> Real-time notifications</li>
+                </ul>
+            </div>
+            
+            <div class="payment-options">
+                <!-- Khalti Payment -->
+                <div class="khalti-payment">
+                    <div class="khalti-container">
+                        <div class="khalti-logo">
+                            <img src="https://web.khalti.com/static/img/logo1.png" alt="Khalti" style="height: 60px; width: auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';"><span style="display:none; color:#5C2D91; font-weight:bold; font-size: 24px;">KHALTI</span>
+                        </div>
+                        <p>Pay with Khalti - Digital Wallet</p>
+                        <button id="khalti-payment-btn" class="khalti-btn">
+                            <i class="fas fa-wallet"></i> Pay Rs. 30 via Khalti
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- eSewa Payment -->
+                <div class="esewa-payment">
+                    <div class="esewa-container">
+                        <div class="esewa-logo">
+                            <img src="https://esewa.com.np/common/images/esewa-logo.png" alt="eSewa" style="height: 60px; width: auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';"><span style="display:none; color:#60BB46; font-weight:bold; font-size: 24px;">eSewa</span>
+                        </div>
+                        <p>Pay securely with your eSewa account</p>
+                        <button id="esewa-payment-btn" class="esewa-btn">
+                            <i class="fas fa-wallet"></i> Pay Rs. 30 via eSewa
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- FREE ACCESS MESSAGE -->
+            <div class="free-access-message">
+                <div class="free-icon">
+                    <i class="fas fa-gift text-green-600 text-4xl mb-4"></i>
+                </div>
+                <h4>Free Access Available!</h4>
+                <p>Room details and chat are currently free to access during our beta period.</p>
+                <button id="free-unlock-btn" class="free-unlock-btn">
+                    <i class="fas fa-unlock"></i> Unlock Room for Free
+                </button>
+            </div>
+            
+            <style>
+            .free-access-message {
+                text-align: center;
+                padding: 2rem;
+                background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+                border-radius: 1rem;
+                border: 2px solid #48bb78;
+            }
+            
+            .free-access-message h4 {
+                color: #2d3748;
+                margin-bottom: 1rem;
+                font-size: 1.5rem;
+            }
+            
+            .free-access-message p {
+                color: #4a5568;
+                margin-bottom: 1.5rem;
+            }
+            
+            .free-unlock-btn {
+                background: #48bb78;
+                color: white;
+                border: none;
+                padding: 1rem 2rem;
+                border-radius: 0.5rem;
+                font-size: 1.1rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s;
+                box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+            }
+            
+            .free-unlock-btn:hover {
+                background: #38a169;
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+            }
+            </style>
+            
+            <div class="payment-actions">
+                <button onclick="closePaymentModal()" class="cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentRoomId = null;
+let paymentSocket = null;
+
+// Initialize WebSocket for real-time payment updates
+function initializePaymentSocket() {
+    if (window.location.protocol === 'https:') {
+        paymentSocket = new WebSocket('wss://' + window.location.host + '/ws/payment/');
+    } else {
+        paymentSocket = new WebSocket('ws://' + window.location.host + '/ws/payment/');
+    }
+    
+    paymentSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        if (data.type === 'payment_success') {
+            closePaymentModal();
+            showSuccessMessage(data.message);
+            
+            // Auto-open chat interface after payment success
+            const roomId = data.room_id || currentRoomId;
+            if (roomId) {
+                openChatInterface(roomId, 'Room Owner');
+            }
+        }
+    };
+}
+
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'alert alert-success';
+    successDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + message;
+    successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; padding: 15px; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 5px;';
+    document.body.appendChild(successDiv);
+    
+    setTimeout(() => {
+        successDiv.remove();
+    }, 5000);
+}
+
+async function openPaymentModal(roomId) {
+    currentRoomId = roomId;
+    document.getElementById('paymentModal').style.display = 'flex';
+    
+    // Create payment intent to get transaction ID
+    try {
+        const response = await fetch('/create-payment-intent/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ room_id: roomId })
+        });
+        
+        const data = await response.json();
+        if (data.error) {
+            alert('Error: ' + data.error);
+            closePaymentModal();
+            return;
+        }
+        
+        // Store transaction ID for payment
+        window.currentTransactionId = data.transaction_id;
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Payment initialization failed');
+        closePaymentModal();
+    }
+}
+
+function closePaymentModal() {
+    const modal = document.getElementById('paymentModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('paymentModal');
+    const modalContent = document.querySelector('.modal-content');
+    
+    if (modal && modal.style.display === 'flex' && !modalContent.contains(event.target)) {
+        closePaymentModal();
+    }
+});
+
+// Khalti Payment Integration
+document.getElementById('khalti-payment-btn').addEventListener('click', async () => {
+    if (!window.currentTransactionId) {
+        alert('Payment not initialized. Please try again.');
+        return;
+    }
+    
+    const config = {
+        "publicKey": "test_public_key_dc74e0fd57cb46cd93832aee0a390234",
+        "productIdentity": window.currentTransactionId,
+        "productName": "Room Unlock - LuxeRooms",
+        "productUrl": window.location.origin,
+        "paymentPreference": ["KHALTI", "EBANKING", "MOBILE_BANKING", "CONNECT_IPS", "SCT"],
+        "eventHandler": {
+            onSuccess(payload) {
+                console.log(payload);
+                verifyKhaltiPayment(payload.token, payload.amount);
+            },
+            onError(error) {
+                console.log(error);
+                alert('Payment failed: ' + error.message);
+            },
+            onClose() {
+                console.log('Payment widget closed');
+            }
+        }
+    };
+    
+    const checkout = new KhaltiCheckout(config);
+    checkout.show({amount: 3000}); // Amount in paisa (Rs. 30 = 3000 paisa)
+});
+
+// eSewa Payment
+document.getElementById('esewa-payment-btn').addEventListener('click', async () => {
+    if (!window.currentTransactionId) {
+        alert('Payment not initialized. Please try again.');
+        return;
+    }
+    
+    const esewaBtn = document.getElementById('esewa-payment-btn');
+    esewaBtn.disabled = true;
+    esewaBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting to eSewa...';
+    
+    try {
+        // Test eSewa connectivity first
+        const testResponse = await fetch('https://uat.esewa.com.np/epay/main', {
+            method: 'HEAD',
+            mode: 'no-cors'
+        }).catch(() => null);
+        
+        // Create and submit eSewa form
+        const esewaForm = document.createElement('form');
+        esewaForm.method = 'POST';
+        esewaForm.action = 'https://uat.esewa.com.np/epay/main';
+        esewaForm.target = '_blank'; // Open in new tab
+        
+        const params = {
+            'tAmt': '30',
+            'amt': '30',
+            'txAmt': '0',
+            'psc': '0',
+            'pdc': '0',
+            'scd': 'EPAYTEST',
+            'pid': window.currentTransactionId,
+            'su': window.location.origin + '/esewa-success/?room=' + currentRoomId,
+            'fu': window.location.origin + '/esewa-failure/'
+        };
+        
+        Object.keys(params).forEach(key => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = params[key];
+            esewaForm.appendChild(input);
+        });
+        
+        document.body.appendChild(esewaForm);
+        esewaForm.submit();
+        
+        // Show instruction to user
+        setTimeout(() => {
+            alert('eSewa payment window opened. Complete payment and return to this page.');
+        }, 1000);
+        
+    } catch (error) {
+        console.error('eSewa connection error:', error);
+        
+        // Fallback: Show manual payment instructions
+        if (confirm('eSewa service is temporarily unavailable. Would you like to see manual payment instructions?')) {
+            showManualPaymentInstructions();
+        }
+    } finally {
+        esewaBtn.disabled = false;
+        esewaBtn.innerHTML = '<i class="fas fa-wallet"></i> Pay Rs. 30 via eSewa';
+    }
+});
+
+function showManualPaymentInstructions() {
+    const instructions = `
+Manual Payment Instructions:
+
+1. Send Rs. 30 to eSewa ID: YOUR_ESEWA_ID
+2. Use transaction ID: ${window.currentTransactionId}
+3. Screenshot the payment confirmation
+4. Email screenshot to: payments@yoursite.com
+5. We'll unlock your room within 24 hours
+
+Or try Khalti payment instead.
+    `;
+    alert(instructions);
+}
+
+// Verify Khalti Payment
+async function verifyKhaltiPayment(token, amount) {
+    try {
+        const response = await fetch('/khalti-verify/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                token: token,
+                amount: amount,
+                room_id: currentRoomId,
+                transaction_id: window.currentTransactionId
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            closePaymentModal();
+            showSuccessMessage('Payment successful! Room unlocked.');
+            
+            // Open chat interface after successful payment
+            openChatInterface(currentRoomId, 'Room Owner');
+        } else {
+            alert('Payment verification failed: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Payment verification failed');
+    }
+}
+
+// Initialize payment socket when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializePaymentSocket();
+    
+    // Add free unlock button event listener
+    const freeUnlockBtn = document.getElementById('free-unlock-btn');
+    if (freeUnlockBtn) {
+        freeUnlockBtn.addEventListener('click', function() {
+            // Simulate successful unlock without payment
+            closePaymentModal();
+            
+            // Show success message
+            showSuccessMessage('Room unlocked for free! Chat access granted.');
+            
+            // Open chat interface directly
+            setTimeout(() => {
+                if (currentRoomId) {
+                    openChatInterface(currentRoomId, 'Room Owner');
+                }
+            }, 1000);
+        });
+    }
+    
+    // Load Khalti SDK
+    const khaltiScript = document.createElement('script');
+    khaltiScript.src = 'https://khalti.com/static/khalti-checkout.js';
+    document.head.appendChild(khaltiScript);
+});
+
+</script>

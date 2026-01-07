@@ -1,0 +1,141 @@
+{% extends 'started/base.html' %}
+{% load static %}
+
+{% block title %}FindMyRoom | Find Your Perfect Space{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'started/css/landing.css' %}">
+<div class="home-page">
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1>Find Your Perfect Space</h1>
+            <p>Discover premium rooms and apartments tailored to your lifestyle</p>
+            <div class="hero-actions">
+                {% if user.is_authenticated %}
+                    {% if user.client %}
+                        <a href="{% url 'client_dashboard' %}" class="btn-primary">Browse Rooms</a>
+                    {% elif user.owner %}
+                        <a href="{% url 'owner_dashboard' %}" class="btn-primary">Manage Properties</a>
+                    {% endif %}
+                {% else %}
+                    <a href="{% url 'register' %}" class="btn-primary">Get Started</a>
+                    <a href="{% url 'login' %}" class="btn-secondary">Login</a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="hero-image">
+            <i class="fas fa-home"></i>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section">
+        <div class="container">
+            <h2>Why Choose FindMyRoom?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <i class="fas fa-search"></i>
+                    <h3>Easy Search</h3>
+                    <p>Find rooms with advanced filters and voice search</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-comments"></i>
+                    <h3>Direct Chat</h3>
+                    <p>Connect directly with property owners</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Secure Payments</h3>
+                    <p>Safe transactions with multiple payment options</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-mobile-alt"></i>
+                    <h3>Mobile Friendly</h3>
+                    <p>Access anywhere, anytime on any device</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Featured Rooms Section -->
+    {% if featured_rooms %}
+    <section class="featured-section">
+        <div class="container">
+            <h2>Featured Properties</h2>
+            <div class="rooms-grid">
+                {% for room in featured_rooms %}
+                <div class="room-card">
+                    {% if room.image %}
+                        <img src="{{ room.image.url }}" alt="{{ room.title }}" class="card-image">
+                    {% else %}
+                        <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="{{ room.title }}" class="card-image">
+                    {% endif %}
+                    <div class="card-content">
+                        <h3>{{ room.title }}</h3>
+                        <p class="location"><i class="fas fa-map-marker-alt"></i> {{ room.location }}</p>
+                        <div class="card-details">
+                            <span><i class="fas fa-bed"></i> {{ room.beds }}</span>
+                            <span><i class="fas fa-bath"></i> {{ room.baths }}</span>
+                            <span><i class="fas fa-ruler-combined"></i> {{ room.area_m2 }}m²</span>
+                        </div>
+                        <div class="price">Rs. {{ room.price }}/month</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="view-all">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'client_dashboard' %}" class="btn-outline">View All Properties</a>
+                {% else %}
+                    <a href="{% url 'register' %}" class="btn-outline">Join to View All</a>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- About Us Section -->
+    <section class="about-section">
+        <div class="container">
+            <h2>About FindMyRoom</h2>
+            <div class="about-content">
+                <div class="about-text">
+                    <p>FindMyRoom is Nepal's premier room rental platform, connecting property owners with tenants seeking quality accommodation. Founded with a vision to simplify the room hunting process, we've helped thousands of people find their perfect living space.</p>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <h3>5000+</h3>
+                            <p>Happy Tenants</p>
+                        </div>
+                        <div class="stat-item">
+                            <h3>1200+</h3>
+                            <p>Property Owners</p>
+                        </div>
+                        <div class="stat-item">
+                            <h3>50+</h3>
+                            <p>Cities Covered</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-image">
+                    <i class="fas fa-users"></i>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Find Your Perfect Room?</h2>
+            <p>Join thousands of satisfied users who found their ideal living space</p>
+            {% if not user.is_authenticated %}
+                <div class="cta-actions">
+                    <a href="{% url 'register' %}" class="btn-primary">Sign Up Now</a>
+                    <a href="{% url 'login' %}" class="btn-secondary">Already have an account?</a>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

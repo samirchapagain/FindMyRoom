@@ -1,0 +1,50 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LuxeRooms | Modern Room Finder Platform{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'started/css/main.css' %}">
+    <link rel="stylesheet" href="{% static 'started/css/khalti.css' %}">
+    <link rel="stylesheet" href="{% static 'started/css/modal.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body>
+    {% include 'started/partials/header.html' %}
+    
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    {% block content %}
+    {% endblock %}
+    
+
+    
+    <!-- Unified Chat System -->
+    {% if user.is_authenticated %}
+        {% include 'started/unified_chat.html' %}
+        {% include 'started/payment_modal.html' %}
+    {% endif %}
+    
+    {{ user.id|json_script:"user-id" }}
+    <script>
+        // Global variables for chat
+        const userIdData = JSON.parse(document.getElementById('user-id').textContent);
+        window.userId = userIdData;
+        window.stripePublishableKey = '{{ stripe_publishable_key|default:"" }}';
+    </script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{% static 'started/js/main.js' %}"></script>
+    <script src="{% static 'started/js/room_unlock.js' %}"></script>
+    <script src="{% static 'started/js/notifications.js' %}"></script>
+</body>
+</html>

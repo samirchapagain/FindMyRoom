@@ -1,0 +1,925 @@
+{% extends 'started/base.html' %}
+
+{% block content %}
+{% csrf_token %}
+<div class="client-dashboard-page">
+<div class="dashboard active" id="clientDashboard">
+    <section class="hero">
+        <h1>Find Your Perfect Space</h1>
+        <p>Discover premium rooms tailored to your preferences</p>
+    </section>
+    
+    <div class="search-container">
+        <form method="GET" id="searchForm">
+            <div class="search-wrapper" id="searchWrapper">
+                <input type="text" name="q" class="search-bar" id="searchInput" placeholder="Search by location, amenities, or price..." value="{{ request.GET.q }}">
+                <button type="button" class="voice-search" id="voiceSearchBtn">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <div class="voice-status" id="voiceStatus">Listening...</div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Mobile Filter Toggle -->
+    <div class="mobile-filter-toggle">
+        <button type="button" class="filter-toggle-btn" id="filterToggle">
+            <i class="fas fa-filter"></i> Filters
+        </button>
+    </div>
+    
+    <div class="filter-container">
+        <aside class="filters" id="filtersPanel">
+            <div class="filter-header">
+                <h3><i class="fas fa-filter"></i> Filters</h3>
+                <button type="button" class="close-filters" id="closeFilters">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form method="GET">
+                <div class="filter-group">
+                    <label for="locati                <div class="filter-group">
+                    <label for="location">Location</label>
+                    <select name="location" id="location">
+                        <option>Any Location</option>
+                        <option {% if request.GET.location == 'Downtown' %}selected{% endif %}>Downtown</option>
+                        <option {% if request.GET.location == 'Suburbs' %}selected{% endif %}>Suburbs</option>
+                        <option {% if request.GET.location == 'Near University' %}selected{% endif %}>Near University</option>
+                        <option {% if request.GET.location == 'Business District' %}selected{% endif %}>Business District</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="price_min">Min Price</label>
+                    <input type="number" name="price_min" id="price_min" placeholder="Min price" value="{{ request.GET.price_min }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="price_max">Max Price</label>
+                    <input type="number" name="price_max" id="price_max" placeholder="Max price" value="{{ request.GET.price_max }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="room_type">Room Type</label>
+                    <select name="room_type" id="room_type">
+                        <option>Any Type</option>
+                        <option value="private" {% if request.GET.room_type == 'private' %}selected{% endif %}>Private Room</option>
+                        <option value="shared" {% if request.GET.room_type == 'shared' %}selected{% endif %}>Shared Room</option>
+                        <option value="studio" {% if request.GET.room_type == 'studio' %}selected{% endif %}>Studio Apartment</option>
+                        <option value="apartment" {% if request.GET.room_type == 'apartment' %}selected{% endif %}>Full Apartment</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="favorites_only">Show Favorites Only</label>
+                    <input type="checkbox" name="favorites_only" id="favorites_only" {% if request.GET.favorites_only %}checked{% endif %}>
+                </div>
+                
+                <button type="submit" class="add-room-btn">Apply Filters</button>
+            </form>
+        </aside>
+        
+        <div class="rooms-grid">
+            {% for room in rooms %}
+            <div class="room-card" data-room-id="{{ room.id }}">
+                {% if room.images.exists %}
+                    <div class="image-gallery" style="position: relative;">
+                        <img src="{{ room.images.first.image.url }}" alt="{{ room.title }}" class="card-image" onclick="showImageGallery({{ room.id }})" style="cursor: pointer;">
+                        {% if room.images.count > 1 %}
+                            <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
+                                <i class="fas fa-images"></i> {{ room.images.count }}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% elif room.image %}
+                    <img src="{{ room.image.url }}" alt="{{ room.title }}" class="card-image">
+                {% else %}
+                    <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="{{ room.title }}" class="card-image">
+                {% endif %}
+                <div class="card-content">
+                    <h3>{{ room.title }}</h3>
+                    <p>{{ room.description|truncatewords:15 }}</p>
+                    
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <i class="fas fa-bed"></i>
+                            <span>{{ room.beds }} Bed{{ room.beds|pluralize }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-bath"></i>
+                            <span>{{ room.baths }} Bath{{ room.baths|pluralize }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-ruler-combined"></i>
+                            <span>{{ room.area_m2 }} m²</span>
+                        </div>
+                    </div>
+                    
+                    <div class="price">Rs. {{ room.price }}/month</div>
+                    
+                    <div class="unlock-options">
+                        <button class="unlock-btn" data-room-id="{{ room.id }}" onclick="handleRoomChat({{ room.id }})">
+                            <i class="fas fa-comments"></i> 
+                            <span class="btn-text">Chat with Owner</span>
+                        </button>
+                        <button class="favorite-btn" data-room-id="{{ room.id }}" onclick="toggleFavorite({{ room.id }})">
+                            <i class="{% if room.id in favorite_rooms %}fas{% else %}far{% endif %} fa-heart"></i>
+                        </button>
+                        <div class="chat-notification-icon" id="chatNotif-{{ room.id }}" onclick="handleRoomChat({{ room.id }})">
+                            <i class="fas fa-envelope"></i>
+                            <span class="notification-badge">1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="no-rooms">
+                <i class="fas fa-home"></i>
+                <p>No rooms found matching your criteria.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+</div>
+
+{% include 'started/unified_chat.html' %}
+
+<!-- Image Gallery Modal -->
+<div id="imageGalleryModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center;" onclick="closeImageGallery()">
+    <div style="max-width: 90%; max-height: 90%; position: relative;" onclick="event.stopPropagation();">
+        <button onclick="closeImageGallery()" style="position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 30px; cursor: pointer;">&times;</button>
+        <div id="galleryContainer" style="display: flex; align-items: center; gap: 20px;">
+            <button onclick="prevImage()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 10px 15px; border-radius: 50%; cursor: pointer; font-size: 18px;">&lt;</button>
+            <img id="galleryImage" style="max-width: 600px; max-height: 500px; border-radius: 10px;">
+            <button onclick="nextImage()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 10px 15px; border-radius: 50%; cursor: pointer; font-size: 18px;">&gt;</button>
+        </div>
+        <div id="imageCounter" style="text-align: center; color: white; margin-top: 10px; font-size: 14px;"></div>
+    </div>
+</div>
+
+<script>
+// Mobile filter toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const filterToggle = document.getElementById('filterToggle');
+    const filtersPanel = document.getElementById('filtersPanel');
+    const closeFilters = document.getElementById('closeFilters');
+    const voiceSearchBtn = document.getElementById('voiceSearchBtn');
+    const searchWrapper = document.getElementById('searchWrapper');
+    const voiceStatus = document.getElementById('voiceStatus');
+    const searchInput = document.getElementById('searchInput');
+    
+    // Voice search functionality
+    if (voiceSearchBtn && 'webkitSpeechRecognition' in window) {
+        const recognition = new webkitSpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        
+        voiceSearchBtn.addEventListener('click', function() {
+            if (voiceSearchBtn.classList.contains('listening')) {
+                recognition.stop();
+                return;
+            }
+            
+            recognition.start();
+            voiceSearchBtn.classList.add('listening');
+            searchWrapper.classList.add('listening');
+            voiceStatus.classList.add('show');
+        });
+        
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            searchInput.value = transcript;
+            
+            // Submit the search form
+            document.getElementById('searchForm').submit();
+        };
+        
+        recognition.onend = function() {
+            voiceSearchBtn.classList.remove('listening');
+            searchWrapper.classList.remove('listening');
+            voiceStatus.classList.remove('show');
+        };
+        
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error:', event.error);
+            voiceSearchBtn.classList.remove('listening');
+            searchWrapper.classList.remove('listening');
+            voiceStatus.classList.remove('show');
+        };
+    } else {
+        // Hide voice search button if not supported
+        if (voiceSearchBtn) {
+            voiceSearchBtn.style.display = 'none';
+        }
+    }
+    
+    // Filter toggle functionality
+    filterToggle?.addEventListener('click', function() {
+        filtersPanel.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    });
+    
+    closeFilters?.addEventListener('click', function() {
+        filtersPanel.classList.remove('show');
+        document.body.style.overflow = '';
+    });
+    
+    // Close filters when clicking outside
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768 && 
+            !filtersPanel.contains(e.target) && 
+            !filterToggle.contains(e.target) && 
+            filtersPanel.classList.contains('show')) {
+            filtersPanel.classList.remove('show');
+            document.body.style.overflow = '';
+        }
+    });
+    
+    initializeNotificationSystem();
+});
+
+async function toggleFavorite(roomId) {
+    try {
+        const response = await fetch('/api/favorites/toggle/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ room_id: roomId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const heartIcon = document.querySelector(`button.favorite-btn[data-room-id="${roomId}"] i`);
+            if (data.favorited) {
+                heartIcon.className = 'fas fa-heart';
+            } else {
+                heartIcon.className = 'far fa-heart';
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+    }
+}
+
+async function handleRoomChat(roomId) {
+    hideRoomNotification(roomId);
+    markMessagesAsRead(roomId);
+    
+    try {
+        const response = await fetch('/unlock/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ room_id: roomId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.contact_details) {
+            openChatInterface(roomId, data.contact_details.owner_name || 'Owner');
+        } else if (data.requires_payment) {
+            openPaymentModal(roomId);
+        } else {
+            alert('Error: ' + (data.error || 'Unable to access chat'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error accessing chat. Please try again.');
+    }
+}
+
+function showRoomNotification(roomId) {
+    const notificationIcon = document.getElementById(`chatNotif-${roomId}`);
+    if (notificationIcon) {
+        notificationIcon.style.display = 'block';
+    }
+}
+
+function hideRoomNotification(roomId) {
+    const notificationIcon = document.getElementById(`chatNotif-${roomId}`);
+    if (notificationIcon) {
+        notificationIcon.style.display = 'none';
+    }
+}
+
+async function markMessagesAsRead(roomId) {
+    try {
+        await fetch('/api/messages/mark-read/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ room_id: roomId })
+        });
+    } catch (error) {
+        console.error('Error marking messages as read:', error);
+    }
+}
+
+function initializeNotificationSystem() {
+    setTimeout(() => {
+        const firstRoom = document.querySelector('.room-card');
+        if (firstRoom) {
+            const roomId = firstRoom.getAttribute('data-room-id');
+            showRoomNotification(roomId);
+        }
+    }, 1000);
+}
+
+let currentImages = [];
+let currentImageIndex = 0;
+
+function showImageGallery(roomId) {
+    fetch(`/api/room/${roomId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.images && data.images.length > 0) {
+                currentImages = data.images;
+                currentImageIndex = 0;
+                updateGalleryImage();
+                document.getElementById('imageGalleryModal').style.display = 'flex';
+            }
+        })
+        .catch(error => console.error('Error loading images:', error));
+}
+
+function closeImageGallery() {
+    document.getElementById('imageGalleryModal').style.display = 'none';
+}
+
+function updateGalleryImage() {
+    if (currentImages.length > 0) {
+        document.getElementById('galleryImage').src = currentImages[currentImageIndex];
+        document.getElementById('imageCounter').textContent = `${currentImageIndex + 1} / ${currentImages.length}`;
+    }
+}
+
+function nextImage() {
+    if (currentImageIndex < currentImages.length - 1) {
+        currentImageIndex++;
+        updateGalleryImage();
+    }
+}
+
+function prevImage() {
+    if (currentImageIndex > 0) {
+        currentImageIndex--;
+        updateGalleryImage();
+    }
+}
+</script>
+
+<style>
+/* Client Dashboard Specific Styles - High Priority */
+.client-dashboard-page {
+    background: var(--light-bg) !important;
+    min-height: 100vh;
+}
+
+.dark-mode .client-dashboard-page {
+    background: var(--dark-bg) !important;
+}
+
+.client-dashboard-page .dashboard {
+    padding: 2rem 5% !important;
+}
+
+.client-dashboard-page .hero {
+    text-align: center !important;
+    padding: 3rem 0 !important;
+    margin-bottom: 3rem !important;
+}
+
+.client-dashboard-page .hero h1 {
+    font-size: 3rem !important;
+    margin-bottom: 1rem !important;
+    background: linear-gradient(135deg, var(--light-accent), var(--light-secondary)) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    color: transparent !important;
+}
+
+.dark-mode .client-dashboard-page .hero h1 {
+    background: linear-gradient(135deg, var(--dark-accent), var(--dark-secondary)) !important;
+    background-clip: text !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    color: transparent !important;
+}
+
+.client-dashboard-page .search-container {
+    max-width: 700px !important;
+    margin: 0 auto 3rem !important;
+    position: relative !important;
+}
+
+.client-dashboard-page .filter-container {
+    display: flex !important;
+    gap: 2rem !important;
+    margin-bottom: 3rem !important;
+}
+
+.client-dashboard-page .filters {
+    width: 300px !important;
+    background: var(--light-card) !important;
+    border-radius: 20px !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05) !important;
+    height: fit-content !important;
+}
+
+.dark-mode .client-dashboard-page .filters {
+    background: var(--dark-card) !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15) !important;
+}
+
+.client-dashboard-page .filter-group {
+    margin-bottom: 1.5rem;
+}
+
+.client-dashboard-page .filter-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--light-text);
+}
+
+.dark-mode .client-dashboard-page .filter-group label {
+    color: var(--dark-text);
+}
+
+.client-dashboard-page .filter-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--light-accent);
+    cursor: pointer;
+}
+
+.dark-mode .client-dashboard-page .filter-group input[type="checkbox"] {
+    accent-color: var(--dark-accent);
+}
+
+.client-dashboard-page .rooms-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
+    gap: 2rem !important;
+    flex: 1 !important;
+}
+
+.client-dashboard-page .room-card {
+    background: var(--light-card) !important;
+    border-radius: 20px !important;
+    overflow: hidden !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05) !important;
+    position: relative !important;
+    transform: translateY(0) !important;
+    transition: var(--transition) !important;
+}
+
+.dark-mode .client-dashboard-page .room-card {
+    background: var(--dark-card) !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+.client-dashboard-page .room-card:hover {
+    transform: translateY(-10px) !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dark-mode .client-dashboard-page .room-card:hover {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Mobile Filter Toggle */
+.client-dashboard-page .mobile-filter-toggle {
+    display: none;
+    padding: 0 5%;
+    margin-bottom: 1rem;
+}
+
+.client-dashboard-page .filter-toggle-btn {
+    background: var(--light-accent);
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.dark-mode .client-dashboard-page .filter-toggle-btn {
+    background: var(--dark-accent);
+}
+
+.client-dashboard-page .filter-toggle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+}
+
+/* Filter Header */
+.client-dashboard-page .filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.client-dashboard-page .close-filters {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.client-dashboard-page .close-filters:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+/* Responsive Unlock Options */
+.client-dashboard-page .unlock-options {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.client-dashboard-page .unlock-btn {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--light-accent), var(--light-secondary));
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.dark-mode .client-dashboard-page .unlock-btn {
+    background: linear-gradient(135deg, var(--dark-accent), var(--dark-secondary));
+}
+
+.client-dashboard-page .unlock-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+}
+
+.client-dashboard-page .favorite-btn {
+    background: none;
+    border: none;
+    padding: 0.8rem;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+}
+
+.client-dashboard-page .favorite-btn i {
+    color: #ff6b6b;
+    font-size: 1.2rem;
+}
+
+.client-dashboard-page .favorite-btn:hover {
+    background: rgba(255, 107, 107, 0.1);
+    transform: scale(1.1);
+}
+
+.client-dashboard-page .chat-notification-icon {
+    display: none;
+    position: relative;
+    cursor: pointer;
+    padding: 0.8rem;
+    border-radius: 50%;
+    background: #f0f2f5;
+    transition: all 0.3s ease;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+}
+
+.dark-mode .client-dashboard-page .chat-notification-icon {
+    background: #374151;
+}
+
+.client-dashboard-page .chat-notification-icon:hover {
+    background: #e4e6ea;
+    transform: scale(1.1);
+}
+
+.dark-mode .client-dashboard-page .chat-notification-icon:hover {
+    background: #4b5563;
+}
+
+.client-dashboard-page .chat-notification-icon i {
+    color: #1877f2;
+    font-size: 1rem;
+}
+
+.client-dashboard-page .notification-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: #ff3040;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 11px;
+    font-weight: bold;
+    border: 2px solid white;
+    animation: pulse 2s infinite;
+}
+
+/* No Rooms State */
+.client-dashboard-page .no-rooms {
+    text-align: center;
+    padding: 3rem;
+    color: #6b7280;
+    grid-column: 1 / -1;
+}
+
+.client-dashboard-page .no-rooms i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.client-dashboard-page .no-rooms p {
+    font-size: 1.2rem;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .client-dashboard-page .rooms-grid {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .client-dashboard-page .filter-container {
+        flex-direction: column;
+    }
+    
+    .client-dashboard-page .filters {
+        width: 100%;
+        margin-bottom: 2rem;
+    }
+    
+    .client-dashboard-page .dashboard {
+        padding: 1rem 3%;
+    }
+}
+
+@media (max-width: 768px) {
+    .client-dashboard-page .mobile-filter-toggle {
+        display: block;
+    }
+    
+    .client-dashboard-page .filters {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 85%;
+        max-width: 350px;
+        height: 100vh;
+        background: var(--light-card);
+        z-index: 1000;
+        transition: left 0.3s ease;
+        overflow-y: auto;
+        padding: 2rem 1.5rem;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .dark-mode .client-dashboard-page .filters {
+        background: var(--dark-card);
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+    }
+    
+    .client-dashboard-page .filters.show {
+        left: 0;
+    }
+    
+    .client-dashboard-page .close-filters {
+        display: block;
+    }
+    
+    .client-dashboard-page .filter-container {
+        gap: 0;
+    }
+    
+    .client-dashboard-page .rooms-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .client-dashboard-page .dashboard {
+        padding: 1rem 2%;
+    }
+    
+    .client-dashboard-page .hero {
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    .client-dashboard-page .hero h1 {
+        font-size: 2rem;
+    }
+    
+    .client-dashboard-page .search-container {
+        margin-bottom: 2rem;
+    }
+    
+    .client-dashboard-page .card-details {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .client-dashboard-page .detail-item {
+        font-size: 0.85rem;
+    }
+    
+    .client-dashboard-page .unlock-btn .btn-text {
+        display: none;
+    }
+    
+    .client-dashboard-page .unlock-btn {
+        padding: 0.8rem;
+        min-width: 44px;
+    }
+}
+
+@media (max-width: 480px) {
+    .client-dashboard-page .dashboard {
+        padding: 0.5rem 1%;
+    }
+    
+    .client-dashboard-page .hero {
+        padding: 1.5rem 0;
+        margin-bottom: 1.5rem;
+    }
+    
+    .client-dashboard-page .hero h1 {
+        font-size: 1.8rem;
+    }
+    
+    .client-dashboard-page .hero p {
+        font-size: 1rem;
+    }
+    
+    .client-dashboard-page .room-card {
+        margin: 0 0.5rem;
+    }
+    
+    .client-dashboard-page .card-content {
+        padding: 1rem;
+    }
+    
+    .client-dashboard-page .unlock-options {
+        gap: 0.25rem;
+    }
+    
+    .client-dashboard-page .favorite-btn, .client-dashboard-page .chat-notification-icon {
+        width: 40px;
+        height: 40px;
+        padding: 0.6rem;
+    }
+    
+    .client-dashboard-page .filters {
+        width: 90%;
+        padding: 1.5rem 1rem;
+    }
+}
+
+/* Voice Search Styles */
+.client-dashboard-page .search-wrapper {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    background: var(--light-card) !important;
+    border-radius: 50px !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
+    padding: 0.5rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.dark-mode .client-dashboard-page .search-wrapper {
+    background: var(--dark-card) !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+.client-dashboard-page .search-wrapper.listening {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4) !important;
+    border: 2px solid var(--light-accent) !important;
+}
+
+.dark-mode .client-dashboard-page .search-wrapper.listening {
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.4) !important;
+    border: 2px solid var(--dark-accent) !important;
+}
+
+.client-dashboard-page .search-bar {
+    flex: 1 !important;
+    padding: 1rem 1.5rem !important;
+    border: none !important;
+    border-radius: 50px !important;
+    font-size: 1.1rem !important;
+    background: transparent !important;
+    outline: none !important;
+    color: var(--light-text) !important;
+}
+
+.dark-mode .client-dashboard-page .search-bar {
+    color: var(--dark-text) !important;
+}
+
+.client-dashboard-page .voice-search {
+    padding: 0.8rem !important;
+    background: none !important;
+    border: none !important;
+    font-size: 1.3rem !important;
+    color: var(--light-accent) !important;
+    cursor: pointer !important;
+    border-radius: 50% !important;
+    transition: all 0.3s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 48px !important;
+    height: 48px !important;
+}
+
+.dark-mode .client-dashboard-page .voice-search {
+    color: var(--dark-accent) !important;
+}
+
+.client-dashboard-page .voice-search:hover {
+    background: rgba(59, 130, 246, 0.1) !important;
+}
+
+.client-dashboard-page .voice-search.listening {
+    background: var(--light-accent) !important;
+    color: white !important;
+    animation: pulse 1.5s infinite !important;
+}
+
+.client-dashboard-page .voice-status {
+    position: absolute !important;
+    top: -40px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    background: var(--light-accent) !important;
+    color: white !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 20px !important;
+    font-size: 0.9rem !important;
+    opacity: 0 !important;
+    transition: all 0.3s ease !important;
+}
+
+.client-dashboard-page .voice-status.show {
+    opacity: 1 !important;
+    top: -50px !important;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+</style>
+
+{% endblock %}
