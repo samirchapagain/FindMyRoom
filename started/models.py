@@ -1,9 +1,4 @@
-# ============================================================================
-# MODELS.PY - Database Models for LuxeRooms Platform
-# ============================================================================
-# This file defines all database tables and their relationships
-# Each model represents a table in the database
-# ============================================================================
+
 
 from django.db import models
 from django.contrib.auth.models import User  # Django's built-in user system

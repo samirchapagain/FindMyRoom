@@ -158,11 +158,6 @@
                             <a href="{% url 'edit_room' room.id %}" style="flex: 1; padding: 0.6rem; border: none; border-radius: 8px; background: var(--light-accent); color: white; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-edit"></i> Edit
                             </a>
-                            {% if room.latitude and room.longitude %}
-                            <button onclick="viewRoomLocation({{ room.latitude }}, {{ room.longitude }}, '{{ room.title|escapejs }}')" style="flex: 1; padding: 0.6rem; border: none; border-radius: 8px; background: #10b981; color: white; cursor: pointer;">
-                                <i class="fas fa-map-marker-alt"></i> View Location
-                            </button>
-                            {% endif %}
                             <form method="POST" action="{% url 'delete_room' room.id %}" style="flex: 1;" onsubmit="return confirm('Are you sure you want to delete this room?')">
                                 {% csrf_token %}
                                 <button type="submit" style="width: 100%; padding: 0.6rem; border: none; border-radius: 8px; background: #ef4444; color: white;">
@@ -191,17 +186,6 @@
         <div id="messagesList" style="flex: 1; padding: 20px; overflow-y: auto;">
             <p style="text-align: center; color: #666; margin-top: 50px;">No messages yet</p>
         </div>
-    </div>
-</div>
-
-<!-- Room Location View Modal -->
-<div id="roomLocationModal" onclick="if(event.target === this) { closeRoomLocationModal(); }" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; display: none; justify-content: center; align-items: center;">
-    <div onclick="event.stopPropagation();" style="background: white; width: 90%; max-width: 600px; height: 70%; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;">
-        <div style="background: #10b981; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
-            <h3 id="roomLocationTitle" style="margin: 0; font-size: 18px;">Room Location</h3>
-            <button onclick="closeRoomLocationModal();" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
-        </div>
-        <div id="roomLocationMap" style="flex: 1; width: 100%;"></div>
     </div>
 </div>
 
@@ -372,53 +356,6 @@ async function updateMessageCount() {
 }
 
 setInterval(updateMessageCount, 5000);
-
-// Room Location Viewing Functions
-let roomLocationMapInstance;
-
-function viewRoomLocation(lat, lng, roomTitle) {
-    document.getElementById('roomLocationTitle').textContent = roomTitle + ' - Location';
-    document.getElementById('roomLocationModal').style.display = 'flex';
-    
-    setTimeout(() => {
-        initRoomLocationMap(parseFloat(lat), parseFloat(lng));
-    }, 100);
-}
-
-function initRoomLocationMap(lat, lng) {
-    if (roomLocationMapInstance) {
-        roomLocationMapInstance.remove();
-    }
-    
-    const birtamodeBounds = [
-        [26.6200, 87.9700], // Southwest
-        [26.6400, 88.0000]  // Northeast
-    ];
-    
-    roomLocationMapInstance = L.map('roomLocationMap', {
-        maxBounds: birtamodeBounds,
-        maxBoundsViscosity: 1.0
-    }).setView([lat, lng], 16);
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        minZoom: 13,
-        maxZoom: 18
-    }).addTo(roomLocationMapInstance);
-    
-    L.marker([lat, lng])
-        .addTo(roomLocationMapInstance)
-        .bindPopup('Property Location')
-        .openPopup();
-}
-
-function closeRoomLocationModal() {
-    document.getElementById('roomLocationModal').style.display = 'none';
-    if (roomLocationMapInstance) {
-        roomLocationMapInstance.remove();
-        roomLocationMapInstance = null;
-    }
-}
 
 // Leaflet Map Integration
 let locationMap;
