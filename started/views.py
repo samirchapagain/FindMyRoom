@@ -15,6 +15,12 @@ from django.utils.encoding import force_bytes, force_str
 import json
 import stripe
 from .models import Room, Payment, ChatAccess, Message, UserProfile, Owner, Client, RoomAccess, ClientPayment, Conversation, FavoriteRoom, RoomImage, Booking
+from .utils.recommendation import (
+    record_user_activity,
+    recommend_similar_rooms,
+    recommend_rooms_for_user,
+    serialize_rooms_for_api
+)
 from django.utils import timezone
 import requests
 import hashlib
@@ -422,13 +428,50 @@ def get_messages(request):
         return JsonResponse({'error': 'Access denied'}, status=403)
     
     messages_data = []
+    seen = set()
+    seen_items = []  # list of tuples (sender_id, normalized_content, minute_str, iso_ts)
+    duplicates_removed = 0
+
     for msg in messages:
+        # Normalize content used in dedupe comparisons
+        norm_content = ' '.join((msg.content or '').strip().split())
+
+        # Build a dedupe key using sender|content|minute for coarse dedupe
+        key = f"hash:{msg.sender_id}|{norm_content}|{msg.timestamp.strftime('%Y-%m-%dT%H:%M')}"
+
+        # If we've seen this coarse key already, skip
+        if key in seen:
+            duplicates_removed += 1
+            continue
+
+        # More aggressive dedupe: if an earlier message from same sender with same content
+        # exists within 5 seconds, treat as duplicate and skip (keep earliest)
+        is_dup = False
+        for kept in list(seen_items):
+            k_sender, k_content, k_minute, k_ts = kept
+            if k_sender == msg.sender_id and k_content == norm_content:
+                # k_ts is a datetime object; compare seconds-level difference
+                try:
+                    if abs((msg.timestamp - k_ts).total_seconds()) <= 5:
+                        is_dup = True
+                        break
+                except Exception:
+                    # if timestamp unavailable, skip this aggressive check
+                    pass
+        if is_dup:
+            duplicates_removed += 1
+            continue
+
+        seen.add(key)
+        # keep the actual timestamp object for seconds-level comparisons
+        seen_items.append((msg.sender_id, norm_content, msg.timestamp.strftime('%Y-%m-%dT%H:%M'), msg.timestamp))
+
         profile_image = None
         try:
             profile_image = msg.sender.userprofile.get_profile_image()
         except:
             pass
-        
+
         messages_data.append({
             'id': msg.id,
             'sender_id': msg.sender.id,
@@ -439,7 +482,10 @@ def get_messages(request):
             'read_status': msg.read_status,
             'is_mine': msg.sender == request.user
         })
-    
+
+    if duplicates_removed:
+        print(f"get_messages: removed {duplicates_removed} duplicate message(s) for room {room.id}")
+
     return JsonResponse({'messages': messages_data})
 
 @csrf_exempt
@@ -452,7 +498,9 @@ def send_message(request):
         data = json.loads(request.body)
         room_id = data.get('room_id')
         client_id = data.get('client_id')
-        content = data.get('content', '').strip()
+        temp_id = data.get('temp_id')
+        # Normalize content to avoid duplicates caused by minor whitespace differences
+        content = ' '.join((data.get('content', '') or '').strip().split())
         
         if not content:
             return JsonResponse({'error': 'Message content required'}, status=400)
@@ -494,6 +542,22 @@ def send_message(request):
                 room=room
             )
         
+        # Prevent accidental rapid duplicates: if sender recently sent same content in this room, return the existing message
+        last_msg = Message.objects.filter(sender=request.user, room=room, content=content).order_by('-timestamp').first()
+        if last_msg and (timezone.now() - last_msg.timestamp).total_seconds() < 5:
+            resp = {
+                'success': True,
+                'message': {
+                    'id': last_msg.id,
+                    'content': last_msg.content,
+                    'timestamp': last_msg.timestamp.isoformat(),
+                    'sender_name': last_msg.sender.username
+                }
+            }
+            if temp_id:
+                resp['message']['temp_id'] = temp_id
+            return JsonResponse(resp)
+
         message = Message.objects.create(
             conversation=conversation,
             sender=request.user,
@@ -501,16 +565,41 @@ def send_message(request):
             room=room,
             content=content
         )
-        
-        return JsonResponse({
+
+        # Race-condition guard: prefer an earlier identical message if created within 5s
+        from datetime import timedelta
+        dup = Message.objects.filter(
+            sender=request.user,
+            room=room,
+            content=content,
+            timestamp__lt=message.timestamp,
+            timestamp__gte=message.timestamp - timedelta(seconds=5)
+        ).order_by('timestamp').first()
+
+        if dup:
+            # delete the newer duplicate and return the earlier one
+            print(f"views.send_message: detected duplicate for sender={request.user.id} room={room.id} content=<{content[:40]}>. Keeping id={dup.id} and deleting new id={message.id}")
+            message.delete()
+            used_msg = dup
+        else:
+            print(f"views.send_message: created message id={message.id} sender={request.user.id} room={room.id}")
+            used_msg = message
+
+        print(f"views.send_message: returning message id={used_msg.id} temp_id={temp_id}")
+
+        resp = {
             'success': True,
             'message': {
-                'id': message.id,
-                'content': message.content,
-                'timestamp': message.timestamp.isoformat(),
-                'sender_name': message.sender.username
+                'id': used_msg.id,
+                'content': used_msg.content,
+                'timestamp': used_msg.timestamp.isoformat(),
+                'sender_name': used_msg.sender.username
             }
-        })
+        }
+        if temp_id:
+            resp['message']['temp_id'] = temp_id
+
+        return JsonResponse(resp)
     
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
@@ -1040,14 +1129,36 @@ def get_room_info(request, room_id):
         longitude_str = str(room.longitude) if room.longitude is not None else None
         print(f"Room {room_id} converted coordinates: lat_str={latitude_str}, lng_str={longitude_str}")
         
+        # Record a "view" activity for this user and room (non-blocking)
+        record_user_activity(request.user, room, action='view')
+
+        # Build recommendation lists (similar rooms + personalized)
+        similar_qs = recommend_similar_rooms(room, limit=4)
+        personal_qs = recommend_rooms_for_user(request.user, limit=6)
+
+        # Merge while preserving order and uniqueness, and exclude current room
+        recommended = []
+        seen_ids = set()
+        for r in list(similar_qs) + list(personal_qs):
+            if r.id == room.id or r.id in seen_ids:
+                continue
+            recommended.append(r)
+            seen_ids.add(r.id)
+            if len(recommended) >= 6:
+                break
+
+        recommended_serialized = serialize_rooms_for_api(recommended)
+
         response_data = {
             'owner_name': room.owner.user.get_full_name() or room.owner.user.username,
             'room_title': room.title,
             'images': images,
+            'location': room.location,
             'latitude': latitude_str,
-            'longitude': longitude_str
+            'longitude': longitude_str,
+            'recommended_rooms': recommended_serialized
         }
-        
+
         print(f"API Response for room {room_id}: {response_data}")
         return JsonResponse(response_data)
     except Exception as e:
@@ -1099,6 +1210,7 @@ def get_client_messages(request):
                     'owner_id': room.owner.user.id,
                     'owner_name': room.owner.user.get_full_name() or room.owner.user.username,
                     'profile_image': profile_image,
+                    'room_location': room.location,
                     'last_message': latest_message.content[:50] + ('...' if len(latest_message.content) > 50 else ''),
                     'last_message_time': latest_message.timestamp.isoformat(),
                     'unread_count': unread_count
@@ -1214,61 +1326,67 @@ def get_owner_messages(request):
         owner = request.user.owner
     except Owner.DoesNotExist:
         return JsonResponse({'error': 'Owner account required'}, status=403)
-    
+
     try:
         conversations = []
-        client_ids = set()
-        
-        # Get unique clients who have messaged the owner
-        unique_clients = Message.objects.filter(
-            room__owner=owner
-        ).filter(
-            Q(sender__client__isnull=False, receiver=request.user) | Q(sender=request.user, receiver__client__isnull=False)
-        ).values_list('sender', 'receiver').distinct()
-        
-        for sender_id, receiver_id in unique_clients:
-            if sender_id != request.user.id:
-                client_ids.add(sender_id)
-            if receiver_id != request.user.id:
-                client_ids.add(receiver_id)
-        
-        for client_id in client_ids:
-            client_user = User.objects.get(id=client_id)
-            
-            # Get latest message between this specific client and owner
-            latest_message = Message.objects.filter(
-                room__owner=owner
+
+        # Gather all rooms owned by this owner that have messages
+        rooms_with_messages = Message.objects.filter(room__owner=owner).values_list('room', flat=True).distinct()
+
+        for room_id in rooms_with_messages:
+            room = Room.objects.get(id=room_id)
+
+            # Latest message in this room
+            latest_message = Message.objects.filter(room=room).order_by('-timestamp').first()
+            if not latest_message:
+                continue
+
+            # Try to determine the client involved for this room (if any)
+            client_msg = Message.objects.filter(
+                room=room
             ).filter(
-                Q(sender=client_user, receiver=request.user) | Q(sender=request.user, receiver=client_user)
+                Q(sender__client__isnull=False) | Q(receiver__client__isnull=False)
             ).order_by('-timestamp').first()
-                
-            if latest_message:
-                unread_count = Message.objects.filter(
-                    room__owner=owner,
-                    sender=client_user,
-                    receiver=request.user,
-                    read_status=False
-                ).count()
-                
+
+            client_user = None
+            if client_msg:
+                if hasattr(client_msg.sender, 'client'):
+                    client_user = client_msg.sender
+                elif hasattr(client_msg.receiver, 'client'):
+                    client_user = client_msg.receiver
+            else:
+                # fallback: pick the most recent participant that's not the owner
+                fallback = latest_message.sender if latest_message.sender != request.user else latest_message.receiver
+                if hasattr(fallback, 'client'):
+                    client_user = fallback
+
+            unread_count = Message.objects.filter(room=room, receiver=request.user, read_status=False).count()
+
+            profile_image = None
+            client_id = None
+            client_name = None
+            if client_user:
+                client_id = client_user.id
+                client_name = client_user.get_full_name() or client_user.username
                 try:
                     profile_image = client_user.userprofile.get_profile_image()
                 except:
                     profile_image = None
-                
-                conversations.append({
-                    'room_id': latest_message.room.id,
-                    'room_title': latest_message.room.title,
-                    'client_id': client_user.id,
-                    'client_name': client_user.get_full_name() or client_user.username,
-                    'profile_image': profile_image,
-                    'last_message': latest_message.content[:50] + ('...' if len(latest_message.content) > 50 else ''),
-                    'last_message_time': latest_message.timestamp.isoformat(),
-                    'unread_count': unread_count
-                })
-        
+
+            conversations.append({
+                'room_id': room.id,
+                'room_title': room.title,
+                'client_id': client_id,
+                'room_location': room.location,
+                'client_name': client_name,
+                'profile_image': profile_image,
+                'last_message': latest_message.content[:50] + ('...' if len(latest_message.content) > 50 else ''),
+                'last_message_time': latest_message.timestamp.isoformat(),
+                'unread_count': unread_count
+            })
+
         conversations.sort(key=lambda x: x['last_message_time'], reverse=True)
         return JsonResponse({'conversations': conversations})
-        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 

@@ -42,7 +42,10 @@
 <div id="locationMapModal" onclick="if(event.target === this) { closeLocationMap(); }" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 10000; display: none; justify-content: center; align-items: center;">
     <div onclick="event.stopPropagation();" style="background: white; width: 90%; max-width: 600px; height: 70%; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden;">
         <div style="background: #128c7e; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0; font-size: 18px;">Property Location</h3>
+            <div>
+                <h3 style="margin: 0; font-size: 18px;">Property Location</h3>
+                <small style="opacity: 0.9; font-size: 12px;">Tip: double-tap (mobile) or double-click to zoom at a point</small>
+            </div>
             <button onclick="closeLocationMap();" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
         </div>
         <div id="clientLocationMap" style="flex: 1; width: 100%;"></div>
@@ -50,12 +53,22 @@
 </div>
 
 <script>
-let chatSocket = null;
-let currentChatRoomId = null;
-let bookingStatus = null;
-let currentRoomLocation = null;
+// Use `var` and sync to `window` so re-including the template won't throw redeclare errors
+var chatSocket = window.chatSocket || null;
+var currentChatRoomId = window.currentChatRoomId || null;
+var bookingStatus = window.bookingStatus || null;
+var currentRoomLocation = window.currentRoomLocation || null;
 // Track the Leaflet map instance used in the location modal so we can remove it between rooms
-let clientLocationMapInstance = null; 
+var clientLocationMapInstance = window.clientLocationMapInstance || null; 
+
+// Helper to keep globals in sync when they change
+function syncGlobals() {
+    window.chatSocket = chatSocket;
+    window.currentChatRoomId = currentChatRoomId;
+    window.bookingStatus = bookingStatus;
+    window.currentRoomLocation = currentRoomLocation;
+    window.clientLocationMapInstance = clientLocationMapInstance;
+}
 
 async function openChatInterface(roomId, ownerName) {
     console.log('openChatInterface called', roomId, ownerName);
@@ -106,11 +119,13 @@ async function openChatInterface(roomId, ownerName) {
                     lat: parseFloat(roomData.latitude),
                     lng: parseFloat(roomData.longitude)
                 };
+                syncGlobals();
                 console.log('Location loaded:', currentRoomLocation);
                 if (locationButton) { locationButton.disabled = false; locationButton.style.display = 'flex'; }
             } else {
                 // Clear previous value so we don't show the wrong map for rooms without location
                 currentRoomLocation = null;
+                syncGlobals();
                 console.log('No location data found for room');
                 console.log('Room data received:', roomData);
                 console.log('Latitude:', roomData.latitude, 'Longitude:', roomData.longitude);
@@ -154,6 +169,7 @@ function closeChatInterface() {
     if (chatSocket) {
         chatSocket.close();
         chatSocket = null;
+        syncGlobals();
     }
     
     // Don't clear currentChatRoomId so notifications can still work
@@ -167,14 +183,28 @@ function closeChatInterface() {
 }
 
 function initializeChatSocket(roomId) {
+    // If there's an existing socket for a different room, close it to avoid duplicate listeners
+    try {
+        if (chatSocket) {
+            try { chatSocket.close(); } catch (e) { console.warn('Error closing existing socket', e); }
+            chatSocket = null;
+        }
+    } catch (err) {
+        console.warn('Error while resetting chat socket:', err);
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     chatSocket = new WebSocket(`${protocol}//${window.location.host}/ws/chat/${roomId}/`);
-    
+    chatSocket._roomId = roomId;
+    // Sync to global so other script runs don't redeclare and visual checks can see it
+    syncGlobals();
+    console.debug('Initializing chat socket for room', roomId);
+
     chatSocket.onmessage = function(e) {
         const data = JSON.parse(e.data);
         if (data.type === 'chat_message') {
-            displayChatMessage(data.message);
-            
+            handleIncomingSocketMessage(data.message);
+
             // Show notification if chat is not visible and message is from owner
             const chatInterface = document.getElementById('chatInterface');
             if (chatInterface.style.display === 'none' && !data.message.is_mine) {
@@ -182,11 +212,15 @@ function initializeChatSocket(roomId) {
             }
         }
     };
-    
+
     chatSocket.onclose = function(e) {
         console.log('Chat socket closed');
+        if (chatSocket && chatSocket._roomId === roomId) {
+            chatSocket = null;
+            syncGlobals();
+        }
     };
-    
+
     chatSocket.onerror = function(e) {
         console.error('Chat socket error:', e);
     };
@@ -196,15 +230,39 @@ async function loadChatMessages(roomId) {
     try {
         const response = await fetch(`/api/messages/?room_id=${roomId}`);
         const data = await response.json();
-        
+
         if (data.messages) {
             const messagesContainer = document.getElementById('chatMessages');
             messagesContainer.innerHTML = '';
-            
+
+            // Deduplicate messages by id or by sender+content+minute to avoid repetitive entries
+            const seen = new Set();
+            const deduped = [];
+
             data.messages.forEach(message => {
+                let key;
+                if (message.id) {
+                    key = `id:${message.id}`;
+                } else {
+                    // fallback hash: sender|content|YYYY-MM-DDTHH:MM
+                    const ts = message.timestamp ? new Date(message.timestamp).toISOString().slice(0,16) : '';
+                    key = `hash:${message.sender_id}|${message.content}|${ts}`;
+                }
+
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    deduped.push(message);
+                }
+            });
+
+            if (deduped.length !== data.messages.length) {
+                console.log(`Deduped messages: removed ${data.messages.length - deduped.length} duplicate(s)`);
+            }
+
+            deduped.forEach(message => {
                 displayChatMessage(message, false);
             });
-            
+
             scrollToBottom();
         }
     } catch (error) {
@@ -216,20 +274,84 @@ function displayChatMessage(message, animate = true) {
     const messagesContainer = document.getElementById('chatMessages');
     const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     const isOwn = message.is_mine || message.sender_id === window.userId;
-    
+
+    // Build dedupe key (sender|content|minute)
+    const tsMinute = message.timestamp ? new Date(message.timestamp).toISOString().slice(0,16) : new Date().toISOString().slice(0,16);
+    const senderId = (message.sender_id !== undefined) ? String(message.sender_id) : String(window.userId);
+
+    // If a server id is present, skip if already displayed by id
+    if (message.id) {
+        const existingById = messagesContainer.querySelector(`[data-message-id="${message.id}"]`);
+        if (existingById) {
+            console.debug('displayChatMessage: skipping - already displayed by id', message.id, 'temp_id=', message.temp_id);
+            return; // already displayed
+        }
+    }
+
+    // Check for a near-duplicate (same sender, content, and minute)
+    for (const el of Array.from(messagesContainer.children)) {
+        const existingContent = el.querySelector('.message-content')?.textContent?.trim();
+        const existingSender = el.getAttribute('data-sender-id');
+        const existingTs = el.getAttribute('data-timestamp-minute');
+
+        if (existingSender === senderId && existingContent === message.content && existingTs === tsMinute) {
+            console.debug('displayChatMessage: detected near-duplicate', {
+                sender: senderId, content: message.content, tsMinute
+            });
+            // If this is the server message and the existing element is a temp message, replace it
+            if (message.id && el.getAttribute('data-temp-id')) {
+                console.debug('displayChatMessage: replacing temp element with server message', {temp: el.getAttribute('data-temp-id'), id: message.id});
+                updateMessageElement(el, message);
+            }
+            // Either way, do not append a duplicate
+            return;
+        }
+    }
+
     const messageDiv = document.createElement('div');
     messageDiv.style.cssText = `display: flex; justify-content: ${isOwn ? 'flex-end' : 'flex-start'}; margin-bottom: 10px; align-items: flex-end; gap: 5px;`;
-    
+
+    // Add data attributes for matching temp messages with server messages
+    if (message.temp_id) messageDiv.setAttribute('data-temp-id', message.temp_id);
+    if (message.id) messageDiv.setAttribute('data-message-id', message.id);
+    // Metadata used for dedupe checks
+    messageDiv.setAttribute('data-sender-id', senderId);
+    messageDiv.setAttribute('data-timestamp-minute', tsMinute);
+    if (message.timestamp) messageDiv.setAttribute('data-iso-ts', message.timestamp);
+
     messageDiv.innerHTML = `
         <div style="background: ${isOwn ? '#dcf8c6' : 'white'}; padding: 8px 12px; border-radius: 15px; max-width: 70%; word-wrap: break-word; ${!isOwn ? 'border: 1px solid #ddd;' : ''}">
             ${!isOwn ? `<div style="font-size: 12px; color: #075e54; font-weight: bold; margin-bottom: 2px;">${message.sender_name || 'Owner'}</div>` : ''}
-            <div style="font-size: 14px; color: #000;">${escapeHtml(message.content)}</div>
-            <div style="font-size: 11px; color: #666; ${isOwn ? 'text-align: right;' : ''} margin-top: 2px;">${time}${isOwn ? ' ✓✓' : ''}</div>
+            <div class="message-content" style="font-size: 14px; color: #000;">${escapeHtml(message.content)}</div>
+            <div class="message-meta" style="font-size: 11px; color: #666; ${isOwn ? 'text-align: right;' : ''} margin-top: 2px;">${time}${isOwn ? ' ✓✓' : ''}</div>
         </div>
     `;
-    
+
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
+}
+
+function updateMessageElement(el, message) {
+    if (!el) return;
+    const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const contentDiv = el.querySelector('.message-content');
+    const metaDiv = el.querySelector('.message-meta');
+
+    if (contentDiv && message.content) contentDiv.textContent = message.content;
+    if (metaDiv) metaDiv.textContent = `${time}${message.is_mine ? ' ✓✓' : ''}`;
+
+    // Ensure message id is set and timestamp/sender metadata for dedupe checks
+    if (message.id) {
+        el.setAttribute('data-message-id', message.id);
+        el.removeAttribute('data-temp-id');
+    }
+    if (message.timestamp) {
+        el.setAttribute('data-timestamp-minute', new Date(message.timestamp).toISOString().slice(0,16));
+        el.setAttribute('data-iso-ts', message.timestamp);
+    }
+    if (message.sender_id) {
+        el.setAttribute('data-sender-id', message.sender_id);
+    }
 }
 
 function escapeHtml(text) {
@@ -279,18 +401,66 @@ async function sendMessageViaAPI(message, tempId) {
             },
             body: JSON.stringify({
                 room_id: currentChatRoomId,
-                content: message
+                content: message,
+                temp_id: tempId
             })
         });
         
         const data = await response.json();
         if (data.success) {
-            // Update message to show double tick
-            updateMessageDeliveryStatus(tempId, true);
+            // If server returned the saved message, replace the temp message with the server-sent data
+            if (data.message) {
+                replaceTempMessage(tempId, data.message);
+            } else {
+                updateMessageDeliveryStatus(tempId, true);
+            }
         }
     } catch (error) {
         console.error('Failed to send message:', error);
     }
+}
+
+function handleIncomingSocketMessage(message) {
+    const messagesContainer = document.getElementById('chatMessages');
+    // If message has temp_id, try to find and replace the temp message
+    if (message.temp_id) {
+        const tempEl = messagesContainer.querySelector(`[data-temp-id="${message.temp_id}"]`);
+        if (tempEl) {
+            updateMessageElement(tempEl, message);
+            return;
+        }
+    }
+
+    // If message has an id and we already displayed it, skip
+    if (message.id) {
+        const existing = messagesContainer.querySelector(`[data-message-id="${message.id}"]`);
+        if (existing) {
+            console.debug('handleIncomingSocketMessage: Skipping duplicate incoming message id=', message.id, ' temp_id=', message.temp_id);
+            return;
+        }
+    }
+    console.debug('handleIncomingSocketMessage: processing incoming message', {id: message.id, temp_id: message.temp_id, content: message.content, sender_id: message.sender_id});
+
+    // Before appending, remove any near-duplicate existing elements (same sender, content, within 5s)
+    try {
+        const ts = message.timestamp ? new Date(message.timestamp) : null;
+        const senderId = message.sender_id !== undefined ? String(message.sender_id) : String(window.userId);
+        const candidates = Array.from(messagesContainer.children).filter(el => el.getAttribute('data-sender-id') === senderId && (el.querySelector('.message-content')?.textContent?.trim() === message.content));
+        candidates.forEach(el => {
+            const elTsAttr = el.getAttribute('data-timestamp-minute');
+            const elTs = elTsAttr ? new Date(el.querySelector('.message-meta')?.getAttribute('data-iso-ts') || elTsAttr) : null;
+            // If element is temp or timestamp within 5 seconds, remove it (we will append the canonical one)
+            if (el.getAttribute('data-temp-id') || (ts && elTs && Math.abs(ts - elTs) <= 5000)) {
+                console.debug('handleIncomingSocketMessage: removing near-duplicate element', {existing: {id: el.getAttribute('data-message-id'), temp: el.getAttribute('data-temp-id')}, incoming: {id: message.id, temp: message.temp_id}});
+                el.remove();
+            }
+        });
+    } catch (e) {
+        // ignore
+    }
+
+    // Otherwise append as new message
+    displayChatMessage(message);
 }
 
 function updateMessageDeliveryStatus(tempId, delivered) {
@@ -303,6 +473,31 @@ function updateMessageDeliveryStatus(tempId, delivered) {
             }
         }
     });
+}
+
+function replaceTempMessage(tempId, serverMessage) {
+    const messagesContainer = document.getElementById('chatMessages');
+    const tempEl = messagesContainer.querySelector(`[data-temp-id="${tempId}"]`);
+    if (tempEl) {
+        updateMessageElement(tempEl, serverMessage);
+        // mark as delivered
+        const meta = tempEl.querySelector('.message-meta');
+        if (meta && !meta.textContent.includes('✓✓')) {
+            meta.textContent = meta.textContent.replace('✓', '✓✓');
+        }
+
+        // Remove any other duplicates (same sender, content and minute) that are not the replaced element
+        const tsMinute = serverMessage.timestamp ? new Date(serverMessage.timestamp).toISOString().slice(0,16) : '';
+        const senderId = serverMessage.sender_id !== undefined ? String(serverMessage.sender_id) : String(window.userId);
+        const others = Array.from(messagesContainer.querySelectorAll('div')).filter(el => el !== tempEl && el.getAttribute('data-sender-id') === senderId && (el.querySelector('.message-content')?.textContent?.trim() === serverMessage.content) && el.getAttribute('data-timestamp-minute') === tsMinute);
+        if (others.length) {
+            console.debug('replaceTempMessage: removing other duplicate elements', others.length, 'for', {senderId, content: serverMessage.content, tsMinute});
+            others.forEach(el => el.remove());
+        }
+    } else {
+        // fallback: just append
+        displayChatMessage(serverMessage);
+    }
 }
 
 function handleChatKeyPress(event) {
@@ -505,8 +700,7 @@ function showLocationMap() {
     try {
         if (clientLocationMapInstance) {
             clientLocationMapInstance.remove();
-            clientLocationMapInstance = null;
-            const container = document.getElementById('clientLocationMap');
+            clientLocationMapInstance = null;            syncGlobals();            const container = document.getElementById('clientLocationMap');
             if (container) container.innerHTML = '';
         }
     } catch (err) {
@@ -528,6 +722,7 @@ function closeLocationMap() {
         if (clientLocationMapInstance) {
             clientLocationMapInstance.remove();
             clientLocationMapInstance = null;
+            syncGlobals();
             const container = document.getElementById('clientLocationMap');
             if (container) container.innerHTML = '';
         }
@@ -544,12 +739,42 @@ function initClientLocationMap() {
         [26.6400, 88.0000]  // Northeast
     ];
     
+    if (typeof L === 'undefined') { console.error('Leaflet (L) is not loaded - cannot initialize client location map'); return; }
     // Create a new Leaflet map instance and store it globally so we can remove it later
     clientLocationMapInstance = L.map('clientLocationMap', {
         maxBounds: birtamodeBounds,
-        maxBoundsViscosity: 1.0
-    }).setView([currentRoomLocation.lat, currentRoomLocation.lng], 16);
-    
+        maxBoundsViscosity: 1.0,
+        minZoom: 8,
+        maxZoom: 18
+    }).setView([currentRoomLocation.lat, currentRoomLocation.lng], 13);
+    syncGlobals();
+
+    // No range overlay — show the property centered with a friendly zoom level so users can zoom in/out freely
+    // (Previous implementation used a 1 km circle; removed per user request.)
+
+    // Double-tap / double-click to zoom at the tapped point
+    try {
+        let lastClickTime = 0;
+        clientLocationMapInstance.on('click', function(e) {
+            const now = Date.now();
+            if (now - lastClickTime < 350) {
+                // treat as double tap/click
+                const newZoom = Math.min(clientLocationMapInstance.getMaxZoom(), clientLocationMapInstance.getZoom() + 1);
+                clientLocationMapInstance.setView(e.latlng, newZoom);
+                lastClickTime = 0;
+                return;
+            }
+            lastClickTime = now;
+        });
+
+        // Also handle dblclick explicitly for desktop environments
+        clientLocationMapInstance.on('dblclick', function(e) {
+            const newZoom = Math.min(clientLocationMapInstance.getMaxZoom(), clientLocationMapInstance.getZoom() + 1);
+            clientLocationMapInstance.setView(e.latlng, newZoom);
+        });
+    } catch (err) {
+        console.warn('Error setting up double-tap/double-click handlers for client location map', err);
+    }
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         minZoom: 13,
@@ -567,11 +792,6 @@ function initClientLocationMap() {
         try { clientLocationMapInstance.invalidateSize(); } catch (e) {}
     }, 200);
 }
-    
-    L.marker([currentRoomLocation.lat, currentRoomLocation.lng])
-        .addTo(map)
-        .bindPopup('Property Location')
-        .openPopup();
 
 
 // Show notification when page loads if user has active chat

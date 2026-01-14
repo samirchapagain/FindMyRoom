@@ -80,7 +80,7 @@
                         </div>
                         
                         <div class="form-group">
-                            <label for="{{ form.baths.id_for_label }}">Baths</label>
+                            <label for="{{ form.baths.id_for_label }}">Washrooms</label>
                             {{ form.baths }}
                         </div>
                         
@@ -175,7 +175,7 @@
     </div>
 </div>
 
-{% include 'started/unified_chat.html' %}
+{# unified_chat is included in base.html - avoid duplicate includes #}
 
 <div id="messagesModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999;">
     <div style="background: white; width: 400px; height: 600px; margin: 5% auto; border-radius: 10px; display: flex; flex-direction: column;">
@@ -362,6 +362,7 @@ let locationMap;
 let locationMarker;
 
 function initLocationMap() {
+    if (typeof L === 'undefined') { console.error('Leaflet (L) is not loaded - cannot initialize location map'); return; }
     locationMap = L.map('locationMap').setView([26.629307, 87.982475], 15);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

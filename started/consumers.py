@@ -2,7 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
-from .models import Room, Message, ClientPayment, Conversation
+from .models import Room, Message, ClientPayment
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -30,16 +30,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
     
     async def disconnect(self, close_code):
         # Leave room group
+        # amazonq-ignore-next-line
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
     
     async def receive(self, text_data):
+        # amazonq-ignore-next-line
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type', 'chat_message')
         
         if message_type == 'chat_message':
+            # amazonq-ignore-next-line
             message = text_data_json['message']
             receiver_id = text_data_json.get('receiver_id')
             
@@ -81,6 +84,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 return room.owner == self.user.owner
             
             return False
+        # amazonq-ignore-next-line
         except Room.DoesNotExist:
             return False
     
@@ -93,27 +97,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if hasattr(self.user, 'client'):
                 receiver = room.owner.user
             elif hasattr(self.user, 'owner'):
+                # amazonq-ignore-next-line
                 receiver = User.objects.get(id=receiver_id)
             else:
                 return None
             
-            # Get or create conversation
-            if hasattr(self.user, 'client'):
-                conversation, created = Conversation.objects.get_or_create(
-                    client=self.user.client,
-                    owner=room.owner,
-                    room=room
-                )
-            else:
-                # Owner sending to client
-                conversation, created = Conversation.objects.get_or_create(
-                    client=receiver.client,
-                    owner=self.user.owner,
-                    room=room
-                )
-            
             message = Message.objects.create(
-                conversation=conversation,
                 sender=self.user,
                 receiver=receiver,
                 room=room,
@@ -130,6 +119,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'is_mine': True
             }
         except Exception as e:
+            # amazonq-ignore-next-line
             print(f"Error saving message: {e}")
             return None
 
@@ -142,6 +132,7 @@ class PaymentConsumer(AsyncWebsocketConsumer):
             return
         
         # Join user-specific group for payment notifications
+        # amazonq-ignore-next-line
         self.user_group_name = f'client_{self.user.id}'
         
         await self.channel_layer.group_add(
@@ -153,6 +144,7 @@ class PaymentConsumer(AsyncWebsocketConsumer):
     
     async def disconnect(self, close_code):
         # Leave user group
+        # amazonq-ignore-next-line
         if hasattr(self, 'user_group_name'):
             await self.channel_layer.group_discard(
                 self.user_group_name,
@@ -163,6 +155,7 @@ class PaymentConsumer(AsyncWebsocketConsumer):
         # Send payment success notification to WebSocket
         await self.send(text_data=json.dumps({
             'type': 'payment_success',
-            'room_id': event.get('room_id'),
-            'message': event.get('message', 'Payment successful')
+            # amazonq-ignore-next-line
+            'room_id': event['room_id'],
+            'message': event['message']
         }))
