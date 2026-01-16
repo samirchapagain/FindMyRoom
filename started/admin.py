@@ -1,6 +1,13 @@
 from django.contrib import admin
 from .models import Room, Payment, ChatAccess, Message, Owner, Client, UserProfile, ClientPayment
 
+
+# Customize the site header, title, index title
+admin.site.site_header = "FindMyRoom Admin"
+admin.site.site_title = "FindMyRoom Dashboard"
+admin.site.index_title = "Welcome to FindMyRoom Admin Panel"
+
+
 @admin.register(Room)
 class RoomAdmin(admin.ModelAdmin):
     list_display = ['title', 'room_type', 'location', 'price', 'created_at']

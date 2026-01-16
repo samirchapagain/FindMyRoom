@@ -106,7 +106,24 @@ def client_dashboard(request):
         'room_unlock_price': 30,  # Rs 30 per room
     }
     return render(request, 'started/client_dashboard.html', context)
+@login_required
+def unread_messages_api(request):
+    unread = (
+        Message.objects
+        .filter(receiver=request.user, read_status=False)
+        .values('room_id')
+        .annotate(unread_count=Count('id'))
+    )
 
+    data = [
+        {
+            "id": item["room_id"],
+            "unread_count": item["unread_count"]
+        }
+        for item in unread
+    ]
+
+    return JsonResponse(data, safe=False)
 @login_required
 def owner_dashboard(request):
     # Ensure user has profile
@@ -1044,6 +1061,7 @@ def get_room_info(request, room_id):
             'owner_name': room.owner.user.get_full_name() or room.owner.user.username,
             'room_title': room.title,
             'images': images,
+            'location': room.location,
             'latitude': latitude_str,
             'longitude': longitude_str
         }
@@ -1099,6 +1117,7 @@ def get_client_messages(request):
                     'owner_id': room.owner.user.id,
                     'owner_name': room.owner.user.get_full_name() or room.owner.user.username,
                     'profile_image': profile_image,
+                    'room_location': room.location,
                     'last_message': latest_message.content[:50] + ('...' if len(latest_message.content) > 50 else ''),
                     'last_message_time': latest_message.timestamp.isoformat(),
                     'unread_count': unread_count
@@ -1259,11 +1278,12 @@ def get_owner_messages(request):
                     'room_id': latest_message.room.id,
                     'room_title': latest_message.room.title,
                     'client_id': client_user.id,
+                    'room_location': latest_message.room.location,
                     'client_name': client_user.get_full_name() or client_user.username,
                     'profile_image': profile_image,
                     'last_message': latest_message.content[:50] + ('...' if len(latest_message.content) > 50 else ''),
                     'last_message_time': latest_message.timestamp.isoformat(),
-                    'unread_count': unread_count
+                     'unread_count': unread_count
                 })
         
         conversations.sort(key=lambda x: x['last_message_time'], reverse=True)

@@ -16,6 +16,8 @@ urlpatterns = [
     path('api/messages/send/', views.send_message, name='send_message'),
     path('api/messages/read/', views.mark_messages_read, name='mark_messages_read'),
     path('api/unread-count/', views.get_unread_count, name='get_unread_count'),
+    path('api/unread-messages/', views.unread_messages_api, name='unread_messages_api'),
+
 
     path('login/', views.login_view, name='login'),
     path('register/', views.register_view, name='register'),

@@ -1,0 +1,66 @@
+/* ===== FindMyRoom Admin Custom Styles ===== */
+
+/* Header */
+#header {
+    background-color: #6c5ce7; /* brand color */
+    color: white;
+}
+
+#header h1 a {
+    color: white;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1.8rem;
+    text-decoration: none;
+}
+
+/* Sidebar */
+#user-tools {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 500;
+}
+
+/* Content area */
+#content-main {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+/* Tables */
+#content-main table {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#content-main th {
+    background-color: #6c5ce7;
+    color: white;
+    font-weight: 600;
+}
+
+/* Buttons */
+button, input[type="submit"] {
+    background-color: #6c5ce7;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    padding: 6px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s all ease-in-out;
+}
+
+button:hover, input[type="submit"]:hover {
+    background-color: #5a4bcf;
+}
+
+/* Footer */
+#footer {
+    background: #f0f2f5;
+    text-align: center;
+    font-size: 0.9rem;
+    padding: 10px;
+    border-top: 1px solid #ddd;
+}

@@ -80,69 +80,78 @@
             </form>
         </aside>
         
-        <div class="rooms-grid">
-            {% for room in rooms %}
-            <div class="room-card" data-room-id="{{ room.id }}">
-                {% if room.images.exists %}
-                    <div class="image-gallery" style="position: relative;">
-                        <img src="{{ room.images.first.image.url }}" alt="{{ room.title }}" class="card-image" onclick="showImageGallery({{ room.id }})" style="cursor: pointer;">
-                        {% if room.images.count > 1 %}
-                            <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
-                                <i class="fas fa-images"></i> {{ room.images.count }}
-                            </div>
-                        {% endif %}
+       <div class="rooms-grid" id="roomsGrid">
+    {% for room in rooms %}
+    <div class="room-card" 
+         data-room-id="{{ room.id }}" 
+         data-category="{{ room.room_type }}" 
+         data-location="{{ room.location }}">
+        
+        <div class="rec-badge" style="display:none; position:absolute; top:10px; right:10px; background:#6c5ce7; color:white; padding:4px 8px; border-radius:4px; font-size:10px; z-index:1;">
+            RECOMMENDED
+        </div>
+        
+        {% if room.images.exists %}
+            <div class="image-gallery" style="position: relative;">
+                <img src="{{ room.images.first.image.url }}" alt="{{ room.title }}" class="card-image" onclick="showImageGallery('{{ room.id }}')" style="cursor: pointer;">
+                {% if room.images.count > 1 %}
+                    <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
+                        <i class="fas fa-images"></i> {{ room.images.count }}
                     </div>
-                {% elif room.image %}
-                    <img src="{{ room.image.url }}" alt="{{ room.title }}" class="card-image">
-                {% else %}
-                    <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="{{ room.title }}" class="card-image">
                 {% endif %}
-                <div class="card-content">
-                    <h3>{{ room.title }}</h3>
-                    <p>{{ room.description|truncatewords:15 }}</p>
-                    
-                    <div class="card-details">
-                        <div class="detail-item">
-                            <i class="fas fa-bed"></i>
-                            <span>{{ room.beds }} Bed{{ room.beds|pluralize }}</span>
-                        </div>
-                        <div class="detail-item">
-                            <i class="fas fa-bath"></i>
-                            <span>{{ room.baths }} Bath{{ room.baths|pluralize }}</span>
-                        </div>
-                        <div class="detail-item">
-                            <i class="fas fa-ruler-combined"></i>
-                            <span>{{ room.area_m2 }} m²</span>
-                        </div>
-                    </div>
-                    
-                    <div class="price">Rs. {{ room.price }}/month</div>
-                    
-                    <div class="unlock-options">
-                        <button class="unlock-btn" data-room-id="{{ room.id }}" onclick="handleRoomChat({{ room.id }})">
-                            <i class="fas fa-comments"></i> 
-                            <span class="btn-text">Chat with Owner</span>
-                        </button>
-                        <button class="favorite-btn" data-room-id="{{ room.id }}" onclick="toggleFavorite({{ room.id }})">
-                            <i class="{% if room.id in favorite_rooms %}fas{% else %}far{% endif %} fa-heart"></i>
-                        </button>
-                        <div class="chat-notification-icon" id="chatNotif-{{ room.id }}" onclick="handleRoomChat({{ room.id }})">
-                            <i class="fas fa-envelope"></i>
-                            <span class="notification-badge">1</span>
-                        </div>
-                    </div>
+            </div>
+        {% elif room.image %}
+            <img src="{{ room.image.url }}" alt="{{ room.title }}" class="card-image">
+        {% else %}
+            <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="{{ room.title }}" class="card-image">
+        {% endif %}
+        
+        <div class="card-content">
+            <h3>{{ room.title }}</h3>
+            <p>{{ room.description|truncatewords:15 }}</p>
+            
+            <div class="card-details">
+                <div class="detail-item">
+                    <i class="fas fa-bed"></i>
+                    <span>{{ room.beds }} Bed{{ room.beds|pluralize }}</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-bath"></i>
+                    <span>{{ room.baths }} Bath{{ room.baths|pluralize }}</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-ruler-combined"></i>
+                    <span>{{ room.area_m2 }} m²</span>
                 </div>
             </div>
-            {% empty %}
-            <div class="no-rooms">
-                <i class="fas fa-home"></i>
-                <p>No rooms found matching your criteria.</p>
+            
+            <div class="price">Rs. {{ room.price }}/month</div>
+            
+            <div class="unlock-options">
+                <button class="unlock-btn" data-room-id="{{ room.id }}" onclick="handleRoomChat('{{ room.id }}'); trackUserInterest('{{ room.id }}', 5)">
+                    <i class="fas fa-comments"></i> 
+                    <span class="btn-text">Chat with Owner</span>
+                </button>
+                
+                <button class="favorite-btn" data-room-id="{{ room.id }}" onclick="toggleFavorite('{{ room.id }}'); trackUserInterest('{{ room.id }}', 3)">
+                    <i class="{% if room.id in favorite_rooms %}fas{% else %}far{% endif %} fa-heart"></i>
+                </button>
+                
+                <div class="chat-notification-icon" id="chatNotif-{{ room.id }}" onclick="handleRoomChat('{{ room.id }}'); trackUserInterest('{{ room.id }}', 5)">
+                    <i class="fas fa-envelope"></i>
+                    <span class="notification-badge">1</span>
+                </div>
             </div>
-            {% endfor %}
         </div>
     </div>
+    {% empty %}
+    <div class="no-rooms">
+        <i class="fas fa-home"></i>
+        <p>No rooms found matching your criteria.</p>
+    </div>
+    {% endfor %}
 </div>
-</div>
+    </div>
 
 {% include 'started/unified_chat.html' %}
 
@@ -239,6 +248,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     initializeNotificationSystem();
+    
+    // Apply recommendations on page load
+    setTimeout(applyRecommendations, 300);
 });
 
 async function toggleFavorite(roomId) {
@@ -375,6 +387,84 @@ function prevImage() {
         currentImageIndex--;
         updateGalleryImage();
     }
+}
+
+/** RECOMMENDATION ALGORITHM FUNCTIONS **/
+
+/** * 1. TRACKING: Saves user interest to LocalStorage
+ * weight: 3 for a favorite, 5 for a chat initiation
+ */
+function trackUserInterest(roomId, weight) {
+    const card = document.querySelector(`.room-card[data-room-id="${roomId}"]`);
+    if (!card) return;
+
+    // Retrieve existing preferences or create new object
+    let history = JSON.parse(localStorage.getItem('room_prefs') || '{"cats":{}, "locs":{}}');
+    const cat = card.dataset.category;
+    const loc = card.dataset.location;
+
+    // Add weights to category and location
+    if(cat) history.cats[cat] = (history.cats[cat] || 0) + weight;
+    if(loc) history.locs[loc] = (history.locs[loc] || 0) + weight;
+
+    // Save back to browser memory
+    localStorage.setItem('room_prefs', JSON.stringify(history));
+    
+    // Reapply recommendations after tracking
+    setTimeout(applyRecommendations, 100);
+}
+
+/** * 2. SORTING: Re-orders the grid based on scores
+ */
+function applyRecommendations() {
+    const grid = document.getElementById('roomsGrid');
+    if (!grid) return;
+    
+    const rooms = Array.from(grid.querySelectorAll('.room-card'));
+    const prefs = JSON.parse(localStorage.getItem('room_prefs') || 'null');
+
+    if (!prefs || (!Object.keys(prefs.cats).length && !Object.keys(prefs.locs).length)) {
+        // Hide all badges if no preferences exist
+        rooms.forEach(room => {
+            const badge = room.querySelector('.rec-badge');
+            if (badge) badge.style.display = 'none';
+        });
+        return; // Exit if user has no history
+    }
+
+    rooms.forEach(room => {
+        // Hide all badges first
+        const badge = room.querySelector('.rec-badge');
+        if (badge) badge.style.display = 'none';
+    });
+
+    rooms.sort((a, b) => {
+        // Scoring formula: (Category Match * 2) + (Location Match)
+        let scoreA = (prefs.cats[a.dataset.category] || 0) * 2 + (prefs.locs[a.dataset.location] || 0);
+        let scoreB = (prefs.cats[b.dataset.category] || 0) * 2 + (prefs.locs[b.dataset.location] || 0);
+        
+        // Display "RECOMMENDED" badge if score is high enough
+        if (scoreA > 5) {
+            const badgeA = a.querySelector('.rec-badge');
+            if (badgeA) badgeA.style.display = 'block';
+        }
+        if (scoreB > 5) {
+            const badgeB = b.querySelector('.rec-badge');
+            if (badgeB) badgeB.style.display = 'block';
+        }
+        
+        return scoreB - scoreA; // Sort descending
+    });
+
+    // Re-append rooms in the new order
+    rooms.forEach(room => grid.appendChild(room));
+}
+
+/** * 3. Reset recommendations (optional - can be called from a reset button)
+ */
+function resetRecommendations() {
+    localStorage.removeItem('room_prefs');
+    applyRecommendations();
 }
 </script>
 
