@@ -80,7 +80,7 @@
                         </div>
                         
                         <div class="form-group">
-                            <label for="{{ form.baths.id_for_label }}">Baths</label>
+                            <label for="{{ form.baths.id_for_label }}">Restroom</label>
                             {{ form.baths }}
                         </div>
                         
@@ -313,7 +313,7 @@ async function loadOwnerMessages() {
                                 <h4 style="margin: 0; color: #075e54; font-size: 16px;">${conv.client_name}</h4>
                                 <small style="color: #666;">${new Date(conv.last_message_time).toLocaleDateString()}</small>
                             </div>
-                            <p style="margin: 2px 0; color: #666; font-size: 12px;">${conv.room_title}</p>
+                            <p style="margin: 2px 0; color: #666; font-size: 12px;">${conv.room_title} <small style="color:#999">• ${conv.room_location || ''}</small></p>
                             <p style="margin: 0; color: #333; font-size: 14px;">${conv.last_message}</p>
                         </div>
                         ${conv.unread_count > 0 ? `<div style="background: #ff4444; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold;">${conv.unread_count}</div>` : ''}

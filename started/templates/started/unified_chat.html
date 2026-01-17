@@ -54,96 +54,92 @@ let chatSocket = null;
 let currentChatRoomId = null;
 let bookingStatus = null;
 let currentRoomLocation = null;
-// Track the Leaflet map instance used in the location modal so we can remove it between rooms
-let clientLocationMapInstance = null; 
-
 async function openChatInterface(roomId, ownerName) {
-    console.log('openChatInterface called', roomId, ownerName);
     currentChatRoomId = roomId;
 
-    try {
-        // Hide notification when chat opens
-        hideChatNotification();
-        
-        // Hide room-specific notification icon
-        const roomNotification = document.getElementById(`chatNotif-${roomId}`);
-        if (roomNotification) {
-            roomNotification.style.display = 'none';
-        }
-        
-        // Show/hide booking button based on user role
-        const bookingButton = document.getElementById('bookingButton');
-        const isClient = window.location.pathname.includes('/client/');
-        if (bookingButton && isClient) {
-            bookingButton.style.display = 'flex';
-            // Check booking status for clients
-            await checkBookingStatus(roomId);
-        } else if (bookingButton) {
-            bookingButton.style.display = 'none';
-        }
-        
-        // Get room and owner information
-        try {
-            const response = await fetch(`/api/room/${roomId}/`);
-            const roomData = await response.json();
-            
-            if (roomData.owner_name) {
-                ownerName = roomData.owner_name;
-                document.getElementById('chatOwnerName').textContent = ownerName;
-            }
-            if (roomData.room_title) {
-                document.getElementById('chatRoomTitle').textContent = roomData.room_title;
-            }
-            if (roomData.location) {
-                document.getElementById('chatRoomLocation').textContent = roomData.location;
-            } else {
-                document.getElementById('chatRoomLocation').textContent = '';
-            }
-            // Handle coordinates robustly: clear stale coords and disable location button when missing
-            const locationButton = document.getElementById('locationButton');
-            if (roomData.latitude && roomData.longitude && roomData.latitude !== '' && roomData.longitude !== '') {
-                currentRoomLocation = {
-                    lat: parseFloat(roomData.latitude),
-                    lng: parseFloat(roomData.longitude)
-                };
-                console.log('Location loaded:', currentRoomLocation);
-                if (locationButton) { locationButton.disabled = false; locationButton.style.display = 'flex'; }
-            } else {
-                // Clear previous value so we don't show the wrong map for rooms without location
-                currentRoomLocation = null;
-                console.log('No location data found for room');
-                console.log('Room data received:', roomData);
-                console.log('Latitude:', roomData.latitude, 'Longitude:', roomData.longitude);
-                if (locationButton) { locationButton.disabled = true; locationButton.style.display = 'none'; }
-            }
-        } catch (error) {
-            console.error('Error fetching room info:', error);
-            // Fallback to provided ownerName or default
-            document.getElementById('chatOwnerName').textContent = ownerName || 'Owner';
-        }
+    // Hide notification when chat opens
+    hideChatNotification();
 
-        const chatInterface = document.getElementById('chatInterface');
-        if (chatInterface) chatInterface.style.display = 'flex';
-
-        // Mark messages as read when owner opens chat
-        const isOwner = window.location.pathname.includes('/owner/');
-        if (isOwner) {
-            setTimeout(() => {
-                markOwnerMessagesAsRead(roomId);
-            }, 1000);
-        }
-
-        initializeChatSocket(roomId);
-        loadChatMessages(roomId);
-    } catch (err) {
-        console.error('openChatInterface error:', err);
-        // Ensure the chat modal still attempts to open even if some steps fail
-        try {
-            const chatInterface = document.getElementById('chatInterface');
-            if (chatInterface) chatInterface.style.display = 'flex';
-        } catch (e) {}
+    // Hide room-specific notification icon
+    const roomNotification = document.getElementById(`chatNotif-${roomId}`);
+    if (roomNotification) {
+        roomNotification.style.display = 'none';
     }
+
+    // Show/hide booking button based on user role
+    const bookingButton = document.getElementById('bookingButton');
+    const isClient = window.location.pathname.includes('/client/');
+    const isOwner  = window.location.pathname.includes('/owner/');
+
+    if (bookingButton && isClient) {
+        bookingButton.style.display = 'flex';
+        await checkBookingStatus(roomId);
+    } else if (bookingButton) {
+        bookingButton.style.display = 'none';
+    }
+
+    // Get room and chat header information
+    try {
+        const response = await fetch(`/api/room/${roomId}/`);
+        const roomData = await response.json();
+
+        // ✅ CORRECT HEADER NAME LOGIC
+        if (isClient && roomData.owner_name) {
+            // Client sees OWNER name
+            document.getElementById('chatOwnerName').textContent = roomData.owner_name;
+        }
+        else if (isOwner && roomData.client_name) {
+            // Owner sees CLIENT name
+            document.getElementById('chatOwnerName').textContent = roomData.client_name;
+        }
+        else {
+            document.getElementById('chatOwnerName').textContent = ownerName || 'Chat';
+        }
+
+        // Room title
+        if (roomData.room_title) {
+            document.getElementById('chatRoomTitle').textContent = roomData.room_title;
+        }
+
+        // Room location
+        if (roomData.location) {
+            document.getElementById('chatRoomLocation').textContent = roomData.location;
+        } else {
+            document.getElementById('chatRoomLocation').textContent = '';
+        }
+
+        // Room map location
+        if (roomData.latitude && roomData.longitude) {
+            currentRoomLocation = {
+                lat: parseFloat(roomData.latitude),
+                lng: parseFloat(roomData.longitude)
+            };
+        } else {
+            currentRoomLocation = null;
+            console.log('No location data found for room');
+        }
+
+    } catch (error) {
+        console.error('Error fetching room info:', error);
+        document.getElementById('chatOwnerName').textContent = ownerName || 'Chat';
+    }
+
+    // Show chat UI
+    const chatInterface = document.getElementById('chatInterface');
+    chatInterface.style.display = 'flex';
+
+    // Mark messages as read when owner opens chat
+    if (isOwner) {
+        setTimeout(() => {
+            markOwnerMessagesAsRead(roomId);
+        }, 1000);
+    }
+
+    // Initialize chat
+    initializeChatSocket(roomId);
+    loadChatMessages(roomId);
 }
+
 
 function closeChatInterface() {
     const chatInterface = document.getElementById('chatInterface');
@@ -501,40 +497,16 @@ function showLocationMap() {
     const modal = document.getElementById('locationMapModal');
     modal.style.display = 'flex';
     
-    // If an old map exists from a previous room, remove it to avoid stale display
-    try {
-        if (clientLocationMapInstance) {
-            clientLocationMapInstance.remove();
-            clientLocationMapInstance = null;
-            const container = document.getElementById('clientLocationMap');
-            if (container) container.innerHTML = '';
-        }
-    } catch (err) {
-        console.warn('Error removing previous client map instance', err);
-    }
-
     // Initialize map after modal is visible
     setTimeout(() => {
         initClientLocationMap();
     }, 100);
-} 
+}
 
 function closeLocationMap() {
     const modal = document.getElementById('locationMapModal');
     modal.style.display = 'none';
-
-    // Clean up map instance when modal is closed to prevent reuse across rooms
-    try {
-        if (clientLocationMapInstance) {
-            clientLocationMapInstance.remove();
-            clientLocationMapInstance = null;
-            const container = document.getElementById('clientLocationMap');
-            if (container) container.innerHTML = '';
-        }
-    } catch (err) {
-        console.warn('Error removing client map on close', err);
-    }
-} 
+}
 
 function initClientLocationMap() {
     if (!currentRoomLocation) return;
@@ -544,8 +516,7 @@ function initClientLocationMap() {
         [26.6400, 88.0000]  // Northeast
     ];
     
-    // Create a new Leaflet map instance and store it globally so we can remove it later
-    clientLocationMapInstance = L.map('clientLocationMap', {
+    const map = L.map('clientLocationMap', {
         maxBounds: birtamodeBounds,
         maxBoundsViscosity: 1.0
     }).setView([currentRoomLocation.lat, currentRoomLocation.lng], 16);
@@ -554,25 +525,13 @@ function initClientLocationMap() {
         attribution: '© OpenStreetMap contributors',
         minZoom: 13,
         maxZoom: 18
-    }).addTo(clientLocationMapInstance);
-
-    // Add marker and popup
-    L.marker([currentRoomLocation.lat, currentRoomLocation.lng])
-        .addTo(clientLocationMapInstance)
-        .bindPopup('Property Location')
-        .openPopup();
-
-    // Ensure the map resizes correctly when the modal becomes visible
-    setTimeout(() => {
-        try { clientLocationMapInstance.invalidateSize(); } catch (e) {}
-    }, 200);
-}
+    }).addTo(map);
     
     L.marker([currentRoomLocation.lat, currentRoomLocation.lng])
         .addTo(map)
         .bindPopup('Property Location')
         .openPopup();
-
+}
 
 // Show notification when page loads if user has active chat
 document.addEventListener('DOMContentLoaded', function() {

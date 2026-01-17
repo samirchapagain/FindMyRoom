@@ -39,14 +39,14 @@
             
             <form method="GET">
                 <div class="filter-group">
-                    <label for="locati                <div class="filter-group">
+                   
                     <label for="location">Location</label>
                     <select name="location" id="location">
                         <option>Any Location</option>
-                        <option {% if request.GET.location == 'Downtown' %}selected{% endif %}>Downtown</option>
-                        <option {% if request.GET.location == 'Suburbs' %}selected{% endif %}>Suburbs</option>
-                        <option {% if request.GET.location == 'Near University' %}selected{% endif %}>Near University</option>
-                        <option {% if request.GET.location == 'Business District' %}selected{% endif %}>Business District</option>
+                        <option {% if request.GET.location == 'Downtown' %}selected{% endif %}>Muktichowk</option>
+                        <option {% if request.GET.location == 'Suburbs' %}selected{% endif %}>Sanishare Road</option>
+                        <option {% if request.GET.location == 'Near University' %}selected{% endif %}>Mata mandir</option>
+                        <option {% if request.GET.location == 'Business District' %}selected{% endif %}>Sainikmod</option>
                     </select>
                 </div>
                 
@@ -65,8 +65,8 @@
                     <select name="room_type" id="room_type">
                         <option>Any Type</option>
                         <option value="private" {% if request.GET.room_type == 'private' %}selected{% endif %}>Private Room</option>
-                        <option value="shared" {% if request.GET.room_type == 'shared' %}selected{% endif %}>Shared Room</option>
-                        <option value="studio" {% if request.GET.room_type == 'studio' %}selected{% endif %}>Studio Apartment</option>
+                        <option value="shared" {% if request.GET.room_type == '2BHK' %}selected{% endif %}>2BHK</option>
+                        <option value="studio" {% if request.GET.room_type == '3BHK' %}selected{% endif %}>3BHK</option>
                         <option value="apartment" {% if request.GET.room_type == 'apartment' %}selected{% endif %}>Full Apartment</option>
                     </select>
                 </div>
@@ -117,7 +117,7 @@
                 </div>
                 <div class="detail-item">
                     <i class="fas fa-bath"></i>
-                    <span>{{ room.baths }} Bath{{ room.baths|pluralize }}</span>
+                    <span>{{ room.baths }} Restroom{{ room.baths|pluralize }}</span>
                 </div>
                 <div class="detail-item">
                     <i class="fas fa-ruler-combined"></i>

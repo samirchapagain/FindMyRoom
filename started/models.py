@@ -107,8 +107,8 @@ class Room(models.Model):
     # Used in dropdown menus and filtering
     ROOM_TYPE_CHOICES = [
         ('private', 'Private Room'),      # Single occupancy room
-        ('shared', 'Shared Room'),        # Shared with roommates
-        ('studio', 'Studio Apartment'),   # Small apartment
+        ('2BHK', '2BHK'),        # Shared with roommates
+        ('3BHK', '3BHK'),   # Small apartment
         ('apartment', 'Full Apartment'),  # Complete apartment
         ('house', 'House'),              # Entire house
     ]
